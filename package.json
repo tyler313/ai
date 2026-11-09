@@ -1,0 +1,41 @@
+{
+  "name": "minichat",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "A free, self-hosted ChatGPT-style chat UI for any OpenAI-compatible API (Gemini, Groq, OpenRouter, Ollama…). No build step, zero runtime dependencies.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "vendor": "esbuild tools/hljs-entry.js --bundle --format=esm --minify --outfile=public/vendor/hljs.js"
+  },
+  "keywords": [
+    "chatgpt",
+    "chat-ui",
+    "llm",
+    "openai-compatible",
+    "ollama",
+    "free",
+    "self-hosted"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tyler313/ai.git"
+  },
+  "bugs": {
+    "url": "https://github.com/tyler313/ai/issues"
+  },
+  "homepage": "https://github.com/tyler313/ai#readme",
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "dompurify": "^3.4.17",
+    "esbuild": "^0.28.2",
+    "highlight.js": "^11.12.0",
+    "jsdom": "^31.0.0",
+    "marked": "^18.1.3"
+  }
+}

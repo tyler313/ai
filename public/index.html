@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="description" content="A free, self-hosted ChatGPT-style chat UI that talks to any OpenAI-compatible API." />
+    <title>MiniChat</title>
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="vendor/hljs-github-dark.css" id="hljs-dark" />
+    <link rel="stylesheet" href="vendor/hljs-github-light.css" id="hljs-light" disabled />
+  </head>
+  <body>
+    <!-- ───────────────────────────── sidebar ───────────────────────────── -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-top">
+        <button class="icon-btn" id="toggleSidebar" title="Close sidebar" aria-label="Close sidebar">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M3 5h18v2H3V5zm0 6h18v2H3v-2zm0 6h18v2H3v-2z"/></svg>
+        </button>
+        <button class="icon-btn sidebar-new" id="searchBtn" title="Search chats" aria-label="Search chats">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M10 4a6 6 0 104.47 10.03l4.25 4.25 1.41-1.41-4.25-4.25A6 6 0 0010 4zm0 2a4 4 0 110 8 4 4 0 010-8z"/></svg>
+        </button>
+      </div>
+
+      <div class="sidebar-search hidden" id="searchWrap">
+        <input type="search" id="searchInput" placeholder="Search chats…" autocomplete="off" />
+      </div>
+
+      <button class="new-chat" id="newChat">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5z"/></svg>
+        <span>New chat</span>
+      </button>
+
+      <nav class="chat-list" id="chatList" aria-label="Chat history"></nav>
+
+      <div class="sidebar-bottom">
+        <button class="sidebar-item" id="openSettings">
+          <span class="avatar-mini"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M12 15.5A3.5 3.5 0 1112 8.5a3.5 3.5 0 010 7zm7.4-2.6l1.8 1.4-1.9 3.3-2.2-.9a7.6 7.6 0 01-1.6.9l-.3 2.4h-3.8l-.3-2.4a7.6 7.6 0 01-1.6-.9l-2.2.9-1.9-3.3 1.8-1.4a7.7 7.7 0 010-1.8L3.4 10.7l1.9-3.3 2.2.9a7.6 7.6 0 011.6-.9l.3-2.4h3.8l.3 2.4c.6.2 1.1.5 1.6.9l2.2-.9 1.9 3.3-1.8 1.4c.02.3.02.6 0 .9z"/></svg></span>
+          <span>Settings</span>
+        </button>
+        <div class="sidebar-status" id="modelBadge" title="Current endpoint and model">not configured</div>
+      </div>
+    </aside>
+
+    <div class="scrim" id="scrim"></div>
+
+    <!-- ────────────────────────────── main ─────────────────────────────── -->
+    <main class="main">
+      <header class="topbar">
+        <button class="icon-btn only-mobile" id="openSidebar" title="Open sidebar" aria-label="Open sidebar">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M3 5h18v2H3V5zm0 6h18v2H3v-2zm0 6h18v2H3v-2z"/></svg>
+        </button>
+
+        <div class="model-picker">
+          <select id="modelSelect" title="Model">
+            <option value="">Select a model…</option>
+          </select>
+          <svg class="chev" viewBox="0 0 24 24" width="16" height="16"><path d="M7 10l5 5 5-5H7z"/></svg>
+        </div>
+
+        <div class="topbar-right">
+          <button class="icon-btn" id="themeToggle" title="Toggle light / dark" aria-label="Toggle theme">
+            <svg class="ico-moon" viewBox="0 0 24 24" width="20" height="20"><path d="M12.7 3.1a9 9 0 108.2 12.3A7.5 7.5 0 0112.7 3.1z"/></svg>
+            <svg class="ico-sun" viewBox="0 0 24 24" width="20" height="20"><path d="M12 17a5 5 0 110-10 5 5 0 010 10zm0-13V1h0v3zm0 19v-3M4 12H1v0h3zm19 0h-3M5.6 5.6L3.5 3.5l2.1 2.1zm12.8 12.8l2.1 2.1-2.1-2.1zM18.4 5.6l2.1-2.1-2.1 2.1zM5.6 18.4l-2.1 2.1 2.1-2.1z" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+          </button>
+          <button class="icon-btn" id="topSettings" title="Settings" aria-label="Settings">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 15.5A3.5 3.5 0 1112 8.5a3.5 3.5 0 010 7zm7.4-2.6l1.8 1.4-1.9 3.3-2.2-.9a7.6 7.6 0 01-1.6.9l-.3 2.4h-3.8l-.3-2.4a7.6 7.6 0 01-1.6-.9l-2.2.9-1.9-3.3 1.8-1.4a7.7 7.7 0 010-1.8L3.4 10.7l1.9-3.3 2.2.9a7.6 7.6 0 011.6-.9l.3-2.4h3.8l.3 2.4c.6.2 1.1.5 1.6.9l2.2-.9 1.9 3.3-1.8 1.4c.02.3.02.6 0 .9z"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="thread-scroll" id="threadScroll">
+        <div class="thread" id="thread"></div>
+      </div>
+
+      <div class="composer-region">
+        <div class="composer-shell">
+          <div class="attachments" id="attachments"></div>
+
+          <form class="composer" id="composer">
+            <button type="button" class="icon-btn composer-plus" id="attachBtn" title="Attach an image (vision models only)" aria-label="Attach image">
+              <svg viewBox="0 0 24 24" width="20" height="20"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5z"/></svg>
+            </button>
+            <input type="file" id="fileInput" accept="image/*" multiple hidden />
+
+            <textarea id="input" rows="1" placeholder="Ask anything" autocomplete="off" spellcheck="false"></textarea>
+
+            <button type="button" class="send-btn" id="stopBtn" title="Stop generating" hidden>
+              <svg viewBox="0 0 24 24" width="18" height="18"><path d="M7 7h10v10H7z"/></svg>
+            </button>
+            <button type="submit" class="send-btn" id="sendBtn" title="Send" aria-label="Send">
+              <svg viewBox="0 0 24 24" width="18" height="18"><path d="M3.4 20.4l17.5-7.5c.8-.3.8-1.4 0-1.8L3.4 3.6c-.7-.3-1.4.2-1.3.9l1 6.6c.1.5.5.9 1 .9h8.4c.6 0 1 .4 1 1s-.4 1-1 1H4.1c-.5 0-.9.4-1 .9l-1 6.6c-.1.7.6 1.2 1.3.9z"/></svg>
+            </button>
+          </form>
+          <div class="composer-hint" id="composerHint">Enter to send · Shift + Enter for a new line</div>
+        </div>
+      </div>
+    </main>
+
+    <!-- ───────────────────────── settings modal ────────────────────────── -->
+    <div class="modal-backdrop" id="modal" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="modal-head">
+          <h2 id="modalTitle">Settings</h2>
+          <button class="icon-btn" id="closeModal" aria-label="Close">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path d="M6.4 5l5.6 5.6L17.6 5 19 6.4 13.4 12 19 17.6 17.6 19 12 13.4 6.4 19 5 17.6 10.6 12 5 6.4z"/></svg>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <section class="field">
+            <label for="providerSelect">Provider</label>
+            <select id="providerSelect"></select>
+            <p class="hint" id="providerNote"></p>
+          </section>
+
+          <section class="field">
+            <label for="baseUrl">API endpoint (OpenAI-compatible)</label>
+            <input id="baseUrl" type="text" placeholder="https://api.groq.com/openai/v1" spellcheck="false" />
+            <p class="hint" id="endpointHint"></p>
+          </section>
+
+          <section class="field">
+            <label for="apiKey">API key</label>
+            <div class="row">
+              <input id="apiKey" type="password" placeholder="paste your free key here" spellcheck="false" autocomplete="off" />
+              <button class="btn ghost" id="toggleKey" type="button">Show</button>
+            </div>
+            <p class="hint">
+              Stored in this browser's localStorage only — it never leaves your machine except to the endpoint above.
+              <span id="keyLink"></span>
+            </p>
+          </section>
+
+          <section class="field">
+            <label for="modelInput">Model</label>
+            <div class="row">
+              <input id="modelInput" type="text" list="modelList" placeholder="gemini-2.5-flash" spellcheck="false" />
+              <button class="btn ghost" id="fetchModels" type="button">Fetch models</button>
+            </div>
+            <datalist id="modelList"></datalist>
+            <p class="hint" id="modelHint">Hit "Fetch models" to list everything available on this endpoint with your key.</p>
+          </section>
+
+          <details class="advanced">
+            <summary>Advanced</summary>
+            <section class="field">
+              <label for="systemPrompt">System prompt</label>
+              <textarea id="systemPrompt" rows="3" placeholder="You are a helpful assistant."></textarea>
+            </section>
+            <div class="field-grid">
+              <section class="field">
+                <label for="temperature">Temperature <span class="val" id="tempVal">0.7</span></label>
+                <input id="temperature" type="range" min="0" max="2" step="0.05" value="0.7" />
+              </section>
+              <section class="field">
+                <label for="maxTokens">Max output tokens <span class="val" id="maxVal">0</span></label>
+                <input id="maxTokens" type="number" min="0" max="200000" step="128" value="0" />
+                <p class="hint">0 = provider default</p>
+              </section>
+            </div>
+            <section class="field">
+              <label>Data</label>
+              <div class="row wrap">
+                <button class="btn ghost" id="exportAll" type="button">Export all chats</button>
+                <button class="btn ghost" id="importBtn" type="button">Import</button>
+                <button class="btn ghost danger" id="wipeBtn" type="button">Delete all chats</button>
+              </div>
+              <input type="file" id="importFile" accept="application/json" hidden />
+            </section>
+          </details>
+
+          <div class="test-row">
+            <button class="btn primary" id="saveSettings" type="button">Save</button>
+            <button class="btn ghost" id="testConn" type="button">Test connection</button>
+            <span class="test-result" id="testResult"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast" hidden></div>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
