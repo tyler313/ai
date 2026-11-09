@@ -73,15 +73,26 @@ Settings → **In your browser** → pick a model (Qwen3 8B, Llama 3.1 8B, Qwen2
 Weights download once from Hugging Face, then run on your GPU via WebGPU — nothing leaves the
 machine. Needs Chrome/Edge 113+ or Safari 26+.
 
-### Try it instantly (fake backend)
+### Try it instantly (fake backend, works with no internet)
 
 ```bash
-node tools/demo-model.js &                                   # fake provider on :4010
-PUBLIC_ENDPOINTS=http://localhost:4010/v1 node server.js     # pretend it's a keyless endpoint
+npm run demo        # starts a fake model + the app → http://localhost:3000
 ```
 
-Now the keyless flow, discovery and streaming all work against a canned model — useful for
-seeing the UI before you connect anything real.
+The keyless flow, discovery, diagnostics and streaming all work against a canned model — handy
+for seeing the UI before you connect anything real.
+
+### When keyless endpoints are down
+
+They are community projects, so they come and go. MiniChat assumes they will:
+
+1. **Diagnose** (Settings) shows each endpoint: up/down, model count, latency, error.
+2. **Find a working endpoint** re-probes and switches.
+3. Chat requests fail over automatically to another gateway (re-picking a model that exists
+   there), and the message is resent once if the first attempt dies.
+4. If nothing answers, a banner offers **Use a free Gemini key** or **Run in my browser** —
+   neither depends on those gateways.
+5. If the MiniChat server itself is stopped, a banner says to run `npm start`.
 
 ---
 ## Features
@@ -185,9 +196,8 @@ The app itself has **no runtime dependencies**.
 ## Tests
 
 ```bash
-node tools/demo-model.js &
-PUBLIC_ENDPOINTS=http://localhost:4010/v1 node server.js &
-node tools/smoke-test.mjs
+npm run demo &      # or: node server.js
+npm test
 ```
 
 Boots the real UI in jsdom and drives it: first-run wizard → keyless discovery → model

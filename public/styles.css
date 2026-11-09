@@ -730,3 +730,26 @@ button { font: inherit; color: inherit; }
 .diag-row .bad { color: var(--danger); font-weight: 600; }
 .diag-row .url { color: var(--text-faint); font-family: var(--mono); overflow-wrap: anywhere; }
 .diag-row .err { color: var(--text-dim); }
+
+/* banners */
+.banner {
+  border: 1px solid color-mix(in srgb, #f59e0b 55%, transparent);
+  background: color-mix(in srgb, #f59e0b 12%, transparent);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.banner[hidden] { display: none; }
+.banner .row { margin-top: 10px; }
+
+.server-banner {
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+  color: var(--text);
+  font-size: 13.5px;
+  padding: 9px 16px;
+  text-align: center;
+}
+.server-banner[hidden] { display: none; }
+.server-banner code { font-family: var(--mono); background: var(--hover); padding: 1px 5px; border-radius: 4px; }

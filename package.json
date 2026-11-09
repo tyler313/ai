@@ -7,7 +7,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "vendor": "esbuild tools/hljs-entry.js --bundle --format=esm --minify --outfile=public/vendor/hljs.js"
+    "vendor": "esbuild tools/hljs-entry.js --bundle --format=esm --minify --outfile=public/vendor/hljs.js",
+    "demo": "node tools/demo.js",
+    "test": "node tools/smoke-test.mjs"
   },
   "keywords": [
     "chatgpt",

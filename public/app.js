@@ -504,9 +504,13 @@ function messageNode(msg, conv) {
     err.textContent = msg.error;
     const acts = document.createElement('div');
     acts.className = 'row';
+    const keyless = settings().engine === 'keyless';
     acts.innerHTML =
-      '<button class="btn ghost" data-act="retry">Retry</button><button class="btn ghost" data-act="settings">Settings</button>';
-    acts.addEventListener('click', (e) => {
+      '<button class="btn ghost" data-act="retry">Retry</button>' +
+      (keyless ? '<button class="btn ghost" data-act="reprobe">Try another endpoint</button>' : '') +
+      '<button class="btn ghost" data-act="key">Use a free key</button>' +
+      '<button class="btn ghost" data-act="settings">Settings</button>';
+    acts.addEventListener('click', async (e) => {
       const act = e.target.closest('button')?.dataset.act;
       if (act === 'settings') openModal();
       if (act === 'retry') {
@@ -514,6 +518,23 @@ function messageNode(msg, conv) {
         touch(conv);
         renderThread();
         generate();
+      }
+      if (act === 'reprobe') {
+        conv.messages = conv.messages.filter((m) => m.id !== msg.id);
+        touch(conv);
+        renderThread();
+        try {
+          await discoverKeyless();
+          generate();
+        } catch {
+          renderThread();
+        }
+      }
+      if (act === 'key') {
+        settings().engine = 'api';
+        if (!providers.some((p) => p.id === settings().provider)) settings().provider = 'gemini';
+        save();
+        openModal();
       }
     });
     err.appendChild(acts);
@@ -923,9 +944,23 @@ async function runBrowserEngine(conv, msg, controller) {
   sink.finish();
 }
 
+function showServerBanner(on) {
+  const el = $('serverBanner');
+  el.hidden = !on;
+  if (on) {
+    el.innerHTML =
+      'Can\'t reach the MiniChat server — it may have stopped. Restart it with <code>npm start</code> ' +
+      '(or <code>node server.js</code>) and this page will reconnect.';
+  }
+}
+
 function friendlyError(err) {
   const m = String(err?.message || err);
-  if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return "Couldn't reach the server. Is `node server.js` still running?";
+  if (/Failed to fetch|NetworkError|Load failed/i.test(m)) {
+    showServerBanner(true);
+    return "Couldn't reach the MiniChat server. Is it still running? Start it with `npm start`.";
+  }
+  showServerBanner(false);
   if (/No endpoint configured/i.test(m)) return m;
   if (settings().engine === 'keyless') {
     return `${m}\n\nIf this keeps happening, open Settings and press "Find a working endpoint" to switch to another keyless gateway — or add a free Gemini/Groq key, which is more reliable.`;
@@ -1376,9 +1411,13 @@ async function discoverKeyless({ quiet = false } = {}) {
     renderSidebar();
     applyEngineUI();
     out.textContent = `Connected to ${s.keylessEndpointName} — ${data.models.length} models, using ${s.model}.`;
+    keylessFailed = false;
+    if ($('fallbackBanner')) $('fallbackBanner').hidden = true;
+    showServerBanner(false);
     return data;
   } catch (err) {
     out.textContent = err.message;
+    showFallbackBanner(err);
     if (!quiet) toast('No keyless endpoint answered');
     throw err;
   } finally {
@@ -1423,6 +1462,44 @@ async function runDiagnostics() {
   } catch (err) {
     box.innerHTML = `<div class="diag-row"><span class="err">${escapeHtml(err.message)}</span></div>`;
   }
+}
+
+let keylessFailed = false;
+
+/** When no keyless endpoint answers, offer the routes that always work. */
+function showFallbackBanner(err) {
+  keylessFailed = true;
+  const box = $('fallbackBanner');
+  if (!box) return;
+  box.hidden = false;
+  box.innerHTML =
+    '<b>No keyless endpoint is answering right now.</b> These are community gateways, so they come ' +
+    'and go — two options that don\'t depend on them:' +
+    '<div class="row">' +
+    '<button class="btn primary" data-fb="key">Use a free Gemini key</button>' +
+    '<button class="btn ghost" data-fb="browser">Run in my browser instead</button>' +
+    '<button class="btn ghost" data-fb="retry">Try again</button>' +
+    '</div>';
+  box.onclick = (e) => {
+    const act = e.target.closest('button')?.dataset.fb;
+    if (!act) return;
+    if (act === 'retry') discoverKeyless().catch(() => {});
+    if (act === 'key') {
+      settings().engine = 'api';
+      settings().provider = 'gemini';
+      save();
+      applyEngineUI();
+      $('apiKey').focus();
+      toast('Paste a free key from aistudio.google.com/apikey');
+    }
+    if (act === 'browser') {
+      settings().engine = 'browser';
+      if (!settings().browserModel) settings().browserModel = BROWSER_MODELS[0].id;
+      save();
+      applyEngineUI();
+    }
+  };
+  void err;
 }
 
 function openWizard() {
