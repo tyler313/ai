@@ -720,3 +720,13 @@ button { font: inherit; color: inherit; }
   animation: spin 0.8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* endpoint diagnostics */
+.diag { margin-top: 8px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; font-size: 12px; }
+.diag[hidden] { display: none; }
+.diag-row { display: flex; gap: 8px; align-items: baseline; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+.diag-row:last-child { border-bottom: 0; }
+.diag-row .ok { color: #10a37f; font-weight: 600; }
+.diag-row .bad { color: var(--danger); font-weight: 600; }
+.diag-row .url { color: var(--text-faint); font-family: var(--mono); overflow-wrap: anywhere; }
+.diag-row .err { color: var(--text-dim); }

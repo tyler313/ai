@@ -665,7 +665,30 @@ async function generate() {
     if (conn.kind === 'browser') await runBrowserEngine(conv, msg, controller);
     else await runServerStream(conn, conv, msg, controller);
   } catch (err) {
-    if (err.name !== 'AbortError') msg.error = friendlyError(err);
+    if (err.name === 'AbortError') {
+      // cancelled on purpose
+    } else if (conn.kind === 'keyless' && !msg.autoRetried) {
+      // keyless gateways die and rate-limit: find another one and try once more
+      msg.autoRetried = true;
+      msg.error = null;
+      try {
+        const found = await discoverKeyless({ quiet: true });
+        if (found?.endpoint && found.endpoint !== conn.baseUrl) {
+          const retryConn = connection();
+          msg.model = retryConn.model;
+          msg.content = '';
+          msg.reasoning = '';
+          await runServerStream(retryConn, conv, msg, controller);
+          toast(`Switched to ${found.name || found.endpoint}`);
+        } else {
+          msg.error = friendlyError(err);
+        }
+      } catch {
+        msg.error = friendlyError(err);
+      }
+    } else {
+      msg.error = friendlyError(err);
+    }
   } finally {
     msg.streaming = false;
     streaming = null;
@@ -775,6 +798,7 @@ async function runServerStream(conn, conv, msg, controller) {
         baseUrl: conn.baseUrl,
         apiKey: conn.apiKey,
         model: conn.model,
+        failover: conn.kind === 'keyless',
         temperature: Number(s.temperature),
         maxTokens: Number(s.maxTokens) || 0,
         messages: buildPayload(conv),
@@ -782,8 +806,17 @@ async function runServerStream(conn, conv, msg, controller) {
     });
 
     if (!res.ok || !res.body) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || `Server responded ${res.status}`);
+      const err = await res.json().catch(() => null);
+      if (err?.error) throw new Error(err.error);
+      if (res.status === 502 || res.status === 504) {
+        throw new Error(
+          `The gateway answered ${res.status} — the model endpoint refused or timed out.` +
+            (conn.kind === 'keyless'
+              ? '\n\nMiniChat will try the other keyless endpoints automatically. If it keeps failing, add a free Gemini/Groq key in Settings.'
+              : '\n\nCheck the endpoint URL in Settings, or try another provider.')
+        );
+      }
+      throw new Error(`Server responded ${res.status}${res.statusText ? ' ' + res.statusText : ''}`);
     }
 
     const reader = res.body.getReader();
@@ -1302,7 +1335,9 @@ function renderBrowserModels() {
 function updateKeylessUI() {
   const keyless = settings().engine === 'keyless';
   $('findEndpoint').hidden = !keyless;
+  $('diagnose').hidden = !keyless;
   $('keyField').hidden = keyless;
+  $('diagBox').hidden = $('diagBox').hidden || !keyless;
   if (keyless && !settings().keylessBaseUrl) {
     $('endpointHint').textContent = 'Press "Find a working endpoint" — we probe a few keyless gateways and use the first that answers.';
   } else if (keyless) {
@@ -1349,6 +1384,44 @@ async function discoverKeyless({ quiet = false } = {}) {
   } finally {
     btn.disabled = false;
     btn.textContent = was;
+  }
+}
+
+/** Probes every keyless endpoint and shows what came back. */
+async function runDiagnostics() {
+  const box = $('diagBox');
+  box.hidden = false;
+  box.innerHTML = '<div class="diag-row"><span class="err">Probing endpoints…</span></div>';
+  try {
+    const res = await fetch('/api/public/status');
+    const data = await res.json();
+    box.innerHTML = '';
+    for (const ep of data.endpoints || []) {
+      const row = document.createElement('div');
+      row.className = 'diag-row';
+      const state = document.createElement('span');
+      state.className = ep.ok ? 'ok' : 'bad';
+      state.textContent = ep.ok ? 'up' : 'down';
+      const name = document.createElement('span');
+      name.textContent = `${ep.name} · ${ep.models.length ? ep.models.length + ' models' : ''} · ${ep.ms}ms`;
+      const url = document.createElement('span');
+      url.className = 'url';
+      url.textContent = ep.url;
+      const err = document.createElement('span');
+      err.className = 'err';
+      err.textContent = ep.error || '';
+      row.append(state, name, url, err);
+      box.appendChild(row);
+    }
+    if (!(data.endpoints || []).some((e) => e.ok)) {
+      const hint = document.createElement('div');
+      hint.className = 'diag-row';
+      hint.innerHTML =
+        '<span class="err">Nothing answered: your network may block these hosts, or they are down. A free Gemini key (Settings → Free API key) does not depend on them.</span>';
+      box.appendChild(hint);
+    }
+  } catch (err) {
+    box.innerHTML = `<div class="diag-row"><span class="err">${escapeHtml(err.message)}</span></div>`;
   }
 }
 
@@ -1457,6 +1530,7 @@ function bind() {
     renderSidebar();
   });
   $('findEndpoint').addEventListener('click', () => discoverKeyless().catch(() => {}));
+  $('diagnose').addEventListener('click', () => runDiagnostics());
   document.querySelectorAll('[data-copy]').forEach((btn) =>
     btn.addEventListener('click', async () => {
       try {

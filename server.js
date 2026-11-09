@@ -221,30 +221,77 @@ function scoreModel(id) {
  * best model first. Without this the browser would have to guess URLs that
  * change every few weeks.
  */
-async function handleDiscover(res) {
-  const problems = [];
-  for (const ep of PUBLIC_ENDPOINTS) {
-    try {
-      const data = await getJson(`${ep.url.replace(/\/+$/, '')}/models`, {}, 8000);
+const modelCache = new Map(); // baseUrl -> { at, models: [id] }
+
+/** Model ids for an endpoint, best-scoring first (cached 60s). */
+async function modelsFor(url) {
+  const key = String(url).replace(/\/+$/, '');
+  const hit = modelCache.get(key);
+  if (hit && Date.now() - hit.at < 60_000) return hit.models;
+  const probe = await probeEndpoint({ name: key, url });
+  const ids = probe.models.map((m) => m.id);
+  modelCache.set(key, { at: Date.now(), models: ids });
+  return ids;
+}
+
+async function probeEndpoint(ep) {
+  const started = Date.now();
+  try {
+    const data = await getJson(`${ep.url.replace(/\/+$/, '')}/models`, {}, 8000);
       const raw = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
-      const models = raw
-        .map((m) => (typeof m === 'string' ? { id: m } : m))
-        .filter((m) => m && m.id)
-        .map((m) => ({ id: m.id, context: m.context_length || m.context || 0 }))
-        .sort((a, b) => scoreModel(b.id) - scoreModel(a.id) || a.id.localeCompare(b.id));
-      if (!models.length) {
-        problems.push(`${ep.name}: no models listed`);
-        continue;
-      }
-      return json(res, 200, { endpoint: ep.url, name: ep.name, models, best: models[0].id });
-    } catch (err) {
-      problems.push(`${ep.name}: ${String(err.message).split('\n')[0].slice(0, 120)}`);
+    const models = raw
+      .map((m) => (typeof m === 'string' ? { id: m } : m))
+      .filter((m) => m && m.id)
+      .map((m) => ({ id: m.id, context: m.context_length || m.context || 0 }))
+      .sort((a, b) => scoreModel(b.id) - scoreModel(a.id) || a.id.localeCompare(b.id));
+    modelCache.set(ep.url.replace(/\/+$/, ''), { at: Date.now(), models: models.map((m) => m.id) });
+    return {
+      name: ep.name,
+      url: ep.url,
+      ok: models.length > 0,
+      ms: Date.now() - started,
+      models,
+      error: models.length ? '' : 'connected, but listed no models',
+    };
+  } catch (err) {
+    return {
+      name: ep.name,
+      url: ep.url,
+      ok: false,
+      ms: Date.now() - started,
+      models: [],
+      error: String(err.message).split('\n')[0].slice(0, 160),
+    };
+  }
+}
+
+/** GET /api/public/status — probe every keyless endpoint and report. */
+async function handleStatus(res) {
+  const results = await Promise.all(PUBLIC_ENDPOINTS.map(probeEndpoint));
+  json(res, 200, { endpoints: results });
+}
+
+/** GET /api/public/discover — first endpoint that answers, models best-first. */
+async function handleDiscover(res) {
+  const tried = [];
+  for (const ep of PUBLIC_ENDPOINTS) {
+    const probe = await probeEndpoint(ep);
+    tried.push({ name: probe.name, url: probe.url, ok: probe.ok, ms: probe.ms, error: probe.error });
+    if (probe.ok) {
+      return json(res, 200, {
+        endpoint: probe.url,
+        name: probe.name,
+        models: probe.models,
+        best: probe.models[0].id,
+        tried,
+      });
     }
   }
   json(res, 502, {
     error:
-      'None of the keyless endpoints answered right now. They are community-run and come and go — try again in a minute, or use a free API key (Gemini/Groq/OpenRouter, no card needed).\n\n' +
-      problems.map((p) => `• ${p}`).join('\n'),
+      'None of the keyless endpoints answered just now. They are community-run and come and go — press "Find a working endpoint" to try again, or add a free API key (Gemini/Groq/OpenRouter, no card needed).\n\n' +
+      tried.map((t) => `• ${t.name} (${t.url}): ${t.error || 'failed'}`).join('\n'),
+    tried,
   });
 }
 
@@ -283,8 +330,15 @@ async function handleModels(req, res) {
  */
 async function handleChat(req, res) {
   const body = await readBody(req);
-  const base = resolveBaseUrl(body.baseUrl || process.env.AI_BASE_URL);
+  const requestedBase = resolveBaseUrl(body.baseUrl || process.env.AI_BASE_URL);
   const apiKey = body.apiKey || process.env.AI_API_KEY || '';
+  // Keyless gateways go down and rate-limit; when asked, try the others too.
+  const candidates = body.failover
+    ? [requestedBase, ...PUBLIC_ENDPOINTS.map((e) => e.url.replace(/\/+$/, ''))].filter(
+        (url, i, all) => all.indexOf(url) === i
+      )
+    : [requestedBase];
+  const problems = [];
 
   const messages = Array.isArray(body.messages) ? body.messages : [];
   if (!messages.length) throw Object.assign(new Error('No messages to send.'), { status: 400 });
@@ -314,30 +368,75 @@ async function handleChat(req, res) {
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
-  let upstream;
-  try {
-    upstream = await fetch(`${base}/chat/completions`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload),
-      signal: ctrl.signal,
-    });
-  } catch (err) {
-    clearTimeout(timer);
-    const friendly =
-      err.name === 'AbortError'
-        ? 'Request timed out.'
-        : err.cause?.code === 'ECONNREFUSED' || /ECONNREFUSED/.test(String(err.message))
-          ? `Could not connect to ${base}. If this is a local server (LM Studio, llama.cpp) make sure it is running.`
-          : err.cause?.code === 'ENOTFOUND' || /ENOTFOUND|getaddrinfo/.test(String(err.message))
-            ? `Could not resolve ${new URL(base).host}. Check the endpoint URL and your internet connection.`
-            : `Network error: ${err.message}`;
-    throw new Error(friendly);
+  let upstream = null;
+  let base = requestedBase;
+
+  for (const candidate of candidates) {
+    base = candidate;
+    let ids = [];
+    if (candidate === requestedBase) {
+      ids = [payload.model];
+      // keyless gateways gate some models behind tokens, so line up alternates
+      if (body.failover) ids = ids.concat(await modelsFor(candidate).catch(() => []));
+    } else {
+      ids = await modelsFor(candidate).catch(() => []);
+      if (!ids.length) {
+        problems.push(`${new URL(candidate).host}: no model list`);
+        continue;
+      }
+    }
+    const attempts = [...new Set(ids.filter(Boolean))].slice(0, 3);
+    const host = new URL(candidate).host;
+
+    for (const model of attempts) {
+      payload.model = model;
+      try {
+        const attempt = await fetch(`${candidate}/chat/completions`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(payload),
+          signal: ctrl.signal,
+        });
+        if (attempt.ok) {
+          upstream = attempt;
+          break;
+        }
+        const message = await describeHttpError(`${candidate}/chat/completions`, attempt);
+        problems.push(`${host} · ${model}: ${message.split('\n')[0]}`);
+        // 5xx / 429 / 404 / 402 / 401: this model (or this host) is no good — try the next one.
+        // anything else (bad request, etc.) is our fault, so stop here.
+        if (/^(500|502|503|504|429|404|401|402|403)$/.test(String(attempt.status))) continue;
+        clearTimeout(timer);
+        throw new Error(message);
+      } catch (err) {
+        if (upstream) break;
+        const friendly =
+          err.name === 'AbortError'
+            ? 'Request timed out.'
+            : err.cause?.code === 'ECONNREFUSED' || /ECONNREFUSED/.test(String(err.message))
+              ? `Could not connect to ${candidate}.`
+              : err.cause?.code === 'ENOTFOUND' || /ENOTFOUND|getaddrinfo/.test(String(err.message))
+                ? `Could not resolve ${host}. Check the endpoint URL and your internet connection.`
+                : err.message;
+        if (!problems.some((p) => p.startsWith(host) && p.includes(model || ''))) {
+          problems.push(`${host} · ${model || '?'}: ${String(friendly).split('\n')[0]}`);
+        }
+        if (err.name !== 'AbortError' && !/^Could not|^Network|^fetch/.test(String(friendly))) {
+          clearTimeout(timer);
+          throw new Error(friendly);
+        }
+        break; // network-level failure: move on to the next endpoint
+      }
+    }
+    if (upstream) break;
   }
 
-  if (!upstream.ok) {
+  if (!upstream) {
     clearTimeout(timer);
-    throw new Error(await describeHttpError(`${base}/chat/completions`, upstream));
+    throw new Error(
+      `Every endpoint failed:\n${problems.map((p) => `• ${p}`).join('\n')}\n\n` +
+        'The keyless gateways are community-run and rate-limit hard. Press "Find a working endpoint" in Settings to switch, or add a free Gemini/Groq/OpenRouter key.'
+    );
   }
 
   res.writeHead(200, {
@@ -461,6 +560,7 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/api/providers' && req.method === 'GET') return handleProviders(res);
     if (pathname === '/api/models' && req.method === 'POST') return await handleModels(req, res);
     if (pathname === '/api/public/discover') return await handleDiscover(res);
+    if (pathname === '/api/public/status') return await handleStatus(res);
     if (pathname === '/api/chat' && req.method === 'POST') return await handleChat(req, res);
     if (pathname === '/api/health') return json(res, 200, { ok: true, uptime: process.uptime() });
     if (pathname.startsWith('/api/')) return json(res, 404, { error: 'Unknown endpoint' });

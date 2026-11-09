@@ -46,10 +46,13 @@ authentication (e.g. [LLM7.io](https://api.llm7.io/v1),
 go down, MiniChat doesn't hard-code one:
 
 - the server probes a list of endpoints and uses **whichever answers right now**
-  (`GET /api/public/discover`);
+  (`GET /api/public/discover`), and reports each one's health (`GET /api/public/status`,
+  shown by the **Diagnose** button in Settings);
 - the UI shows **"Find a working endpoint"** — press it any time to re-probe and switch;
 - the model dropdown is filled from that endpoint's live `/v1/models`, best-scoring model first;
-- if one 429s or dies, the error tells you to re-probe or drop in a free key.
+- if one 429s, 5xxes or dies mid-chat, the server automatically fails over to the next
+  endpoint (re-picking a model that exists there), and the UI re-probes and retries once;
+- if every endpoint is unreachable, the error says so and suggests a free API key.
 
 Set your own list with `PUBLIC_ENDPOINTS="https://a/v1,https://b/v1"`.
 
@@ -146,6 +149,8 @@ a dozen different backends.
 | `GET /api/providers` | Provider presets + server-side defaults |
 | `POST /api/models` | Lists models available at an endpoint (used by *Fetch models* / *Test connection*) |
 | `GET /api/public/discover` | Probes the keyless endpoints, returns the first that answers plus its model list ranked best-first |
+| `GET /api/public/status` | Health of every keyless endpoint (used by **Diagnose**) |
+| `POST /api/chat` with `failover: true` | Tries the requested endpoint, then the other keyless endpoints (and alternate models) before giving up |
 | `POST /api/chat` | Streams a chat completion as normalized SSE (`delta`, `reasoning`, `error`, `done`) |
 | `GET /api/health` | Liveness check |
 
@@ -200,7 +205,8 @@ fails gracefully without WebGPU) → free-API-key engine → theme toggle and hi
 | `404 Not found` | Check the endpoint URL and model name (*Fetch models* shows valid names) |
 | `429 Rate limited` | Free tiers cap requests/minute & day — wait, or switch provider |
 | "Couldn't connect" (LM Studio / llama.cpp) | The local server isn't running, or the port differs |
-| Keyless endpoint keeps failing | Press **Find a working endpoint**, or switch to a free Gemini/Groq key |
+| Keyless endpoint keeps failing | Press **Diagnose** to see which endpoints answer, then **Find a working endpoint**; or switch to a free Gemini/Groq key |
+| `Server responded 502` | The gateway refused the request. Keyless mode now retries other endpoints automatically; if it still fails, your network may block those hosts — use a free API key |
 | Model answers but text isn't highlighted | Only bundled languages highlight; it still renders as plain code |
 
 ---

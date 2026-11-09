@@ -77,6 +77,13 @@ check('keyless endpoint discovered', /Connected to/.test($('endpointHint').textC
 check('model auto-selected', $('modelSelect').value === 'demo-model', $('modelSelect').value);
 check('API key field hidden for keyless', $('keyField').hidden === true);
 check('find-endpoint button visible', $('findEndpoint').hidden === false);
+check('diagnose button visible', $('diagnose').hidden === false);
+
+// diagnostics report per-endpoint health
+click($('diagnose'));
+await wait(900);
+check('diagnostics list endpoint health', doc.querySelectorAll('#diagBox .diag-row').length >= 1, $('diagBox').textContent.slice(0, 80));
+check('diagnostics found a live endpoint', /up/.test($('diagBox').textContent), $('diagBox').textContent.slice(0, 120));
 
 click($('closeModal'));
 $('input').value = 'Explain why keyless endpoints are handy';
