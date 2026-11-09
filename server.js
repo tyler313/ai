@@ -1,0 +1,594 @@
+/**
+ * MiniChat server
+ * ---------------
+ * Zero-dependency Node HTTP server that does two things:
+ *   1. serves the static chat UI in ./public
+ *   2. proxies chat requests to any OpenAI-compatible endpoint (streaming)
+ *
+ * Why a proxy? It keeps API keys off the page, dodges browser CORS problems,
+ * and lets the same UI talk to keyless gateways, Gemini, Groq, OpenRouter,
+ * LM Studio, llama.cpp, vLLM — anything that speaks /v1/chat/completions.
+ *
+ * Run:  node server.js            (then open http://localhost:3000)
+ * Env:  PORT, HOST, AI_BASE_URL, AI_API_KEY, AI_MODEL
+ */
+
+import http from 'node:http';
+import fs from 'node:fs';
+import fsp from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PUBLIC_DIR = path.join(__dirname, 'public');
+const PORT = Number(process.env.PORT || 3000);
+const HOST = process.env.HOST || '0.0.0.0';
+
+/** Free-tier OpenAI-compatible providers, offered as presets in the UI. */
+const PROVIDERS = [
+  {
+    id: 'gemini',
+    name: 'Google Gemini',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+    model: 'gemini-2.5-flash',
+    keyUrl: 'https://aistudio.google.com/apikey',
+    note: 'Free tier, no credit card. Generous limits, multimodal.',
+  },
+  {
+    id: 'groq',
+    name: 'Groq',
+    baseUrl: 'https://api.groq.com/openai/v1',
+    model: 'llama-3.3-70b-versatile',
+    keyUrl: 'https://console.groq.com/keys',
+    note: 'Free plan, extremely fast output on open models.',
+  },
+  {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    model: 'deepseek/deepseek-chat-v3-0324:free',
+    keyUrl: 'https://openrouter.ai/keys',
+    note: 'One key, dozens of ":free" models. 50 req/day on the free tier.',
+  },
+  {
+    id: 'keyless',
+    name: 'No signup (keyless endpoints)',
+    baseUrl: '',
+    model: '',
+    keyUrl: '',
+    keyless: true,
+    note: 'Community endpoints that need no account. Press "Find a working endpoint" — models rotate and are rate limited.',
+  },
+  {
+    id: 'openai',
+    name: 'OpenAI',
+    baseUrl: 'https://api.openai.com/v1',
+    model: 'gpt-4o-mini',
+    keyUrl: 'https://platform.openai.com/api-keys',
+    note: 'Paid — bring your own key.',
+  },
+  {
+    id: 'custom',
+    name: 'Custom (OpenAI-compatible)',
+    baseUrl: '',
+    model: '',
+    keyUrl: '',
+    note: 'Any endpoint that speaks /v1/chat/completions.',
+  },
+];
+
+// ---------------------------------------------------------------- utilities
+
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2',
+  '.map': 'application/json; charset=utf-8',
+};
+
+function json(res, status, data) {
+  const body = JSON.stringify(data);
+  res.writeHead(status, {
+    'content-type': 'application/json; charset=utf-8',
+    'content-length': Buffer.byteLength(body),
+    'cache-control': 'no-store',
+  });
+  res.end(body);
+}
+
+function readBody(req, limit = 8 * 1024 * 1024) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks = [];
+    req.on('data', (c) => {
+      size += c.length;
+      if (size > limit) {
+        reject(Object.assign(new Error('Request body too large'), { status: 413 }));
+        req.destroy();
+        return;
+      }
+      chunks.push(c);
+    });
+    req.on('end', () => {
+      if (!chunks.length) return resolve({});
+      try {
+        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+      } catch (err) {
+        reject(Object.assign(new Error('Invalid JSON body'), { status: 400 }));
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
+function resolveBaseUrl(raw) {
+  const url = String(raw || '').trim().replace(/\/+$/, '');
+  if (!url) throw Object.assign(new Error('No endpoint configured. Open Settings and pick a provider.'), { status: 400 });
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw Object.assign(new Error(`Not a valid URL: ${url}`), { status: 400 });
+  }
+  if (!/^https?:$/.test(parsed.protocol)) {
+    throw Object.assign(new Error('Only http/https endpoints are supported.'), { status: 400 });
+  }
+  return url;
+}
+
+/** Turn non-2xx upstream responses into readable messages. */
+async function describeHttpError(url, res) {
+  const text = await res.text().catch(() => '');
+  let detail = text.slice(0, 800);
+  try {
+    const parsed = JSON.parse(detail);
+    detail = parsed?.error?.message || parsed?.message || detail;
+  } catch {
+    /* keep raw text */
+  }
+  const hints = {
+    401: 'Rejected (401) — the API key looks wrong, expired, or missing.',
+    403: 'Forbidden (403) — the key is valid but this model/endpoint is not available to it.',
+    404: 'Not found (404) — check the endpoint URL and model name.',
+    429: 'Rate limited (429) — free tiers cap requests per minute/day. Wait a bit or switch provider.',
+    500: 'Upstream server error (500).',
+    502: 'Bad gateway (502) — the provider is having a moment. Try again.',
+    503: 'Service unavailable (503) — provider overloaded or the model is still loading.',
+  };
+  const prefix = hints[res.status] || `Request failed (${res.status})`;
+  return `${prefix}${detail ? `\n\n${detail}` : ''}\n\n${new URL(url).host}`;
+}
+
+const TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 5 * 60 * 1000);
+
+/** GET helper with a timeout; returns parsed JSON or throws a friendly Error. */
+async function getJson(url, headers, timeoutMs = TIMEOUT_MS) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { headers, signal: ctrl.signal });
+    if (!res.ok) throw new Error(await describeHttpError(url, res));
+    return await res.json();
+  } catch (err) {
+    if (err.name === 'AbortError') throw new Error('Request timed out.');
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// ------------------------------------------------------------------- routes
+
+
+/* ── Keyless endpoints ───────────────────────────────────────────────────────
+   Community gateways that answer /v1/models and /v1/chat/completions without
+   any key. They rotate models and rate-limit hard, so the app probes them in
+   order and uses whichever answers. Override with PUBLIC_ENDPOINTS="a,b,c".  */
+const PUBLIC_ENDPOINTS = (process.env.PUBLIC_ENDPOINTS
+  ? process.env.PUBLIC_ENDPOINTS.split(',').map((u, i) => ({ name: `endpoint ${i + 1}`, url: u.trim() }))
+  : [
+      { name: 'LLM7.io', url: 'https://api.llm7.io/v1' },
+      { name: 'Pollinations', url: 'https://text.pollinations.ai/openai' },
+      { name: 'OVHcloud', url: 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1' },
+    ]
+).filter((e) => e.url);
+
+/** Rough "how good is this model name" guess, used to auto-pick the best. */
+function scoreModel(id) {
+  const m = String(id || '').toLowerCase();
+  let score = 0;
+  if (/embed|embedding|image|dall|tts|whisper|rerank|moderat|vision|video|audio|sd-|\/draw|flux|sana/.test(m)) return -100;
+  if (/\b(pro|max|ultra|opus|large)\b/.test(m)) score += 6;
+  if (/(^|[^a-z])v?([45])(\.\d+)?(-|$)|\bm3\b|k2|glm-5/.test(m)) score += 5;
+  if (/31b|30b|32b|70b|72b|120b|235b/.test(m)) score += 3;
+  if (/20b|24b|27b/.test(m)) score += 2;
+  if (/(^|[^a-z])turbo|flash|mini|small|nano|lite|tiny/.test(m)) score -= 2;
+  if (/1b$|0\.5b|1\.5b|3b|4b|7b|8b/.test(m)) score -= 3;
+  if (/-free$|:free$/.test(m)) score += 1;
+  return score;
+}
+
+/**
+ * GET /api/public/discover
+ * Finds a keyless endpoint that answers right now and returns its model list,
+ * best model first. Without this the browser would have to guess URLs that
+ * change every few weeks.
+ */
+const modelCache = new Map(); // baseUrl -> { at, models: [id] }
+
+/** Model ids for an endpoint, best-scoring first (cached 60s). */
+async function modelsFor(url) {
+  const key = String(url).replace(/\/+$/, '');
+  const hit = modelCache.get(key);
+  if (hit && Date.now() - hit.at < 60_000) return hit.models;
+  const probe = await probeEndpoint({ name: key, url });
+  const ids = probe.models.map((m) => m.id);
+  modelCache.set(key, { at: Date.now(), models: ids });
+  return ids;
+}
+
+async function probeEndpoint(ep) {
+  const started = Date.now();
+  try {
+    const data = await getJson(`${ep.url.replace(/\/+$/, '')}/models`, {}, 8000);
+      const raw = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+    const models = raw
+      .map((m) => (typeof m === 'string' ? { id: m } : m))
+      .filter((m) => m && m.id)
+      .map((m) => ({ id: m.id, context: m.context_length || m.context || 0 }))
+      .sort((a, b) => scoreModel(b.id) - scoreModel(a.id) || a.id.localeCompare(b.id));
+    modelCache.set(ep.url.replace(/\/+$/, ''), { at: Date.now(), models: models.map((m) => m.id) });
+    return {
+      name: ep.name,
+      url: ep.url,
+      ok: models.length > 0,
+      ms: Date.now() - started,
+      models,
+      error: models.length ? '' : 'connected, but listed no models',
+    };
+  } catch (err) {
+    return {
+      name: ep.name,
+      url: ep.url,
+      ok: false,
+      ms: Date.now() - started,
+      models: [],
+      error: String(err.message).split('\n')[0].slice(0, 160),
+    };
+  }
+}
+
+/** GET /api/public/status — probe every keyless endpoint and report. */
+async function handleStatus(res) {
+  const results = await Promise.all(PUBLIC_ENDPOINTS.map(probeEndpoint));
+  json(res, 200, { endpoints: results });
+}
+
+/** GET /api/public/discover — first endpoint that answers, models best-first. */
+async function handleDiscover(res) {
+  const tried = [];
+  for (const ep of PUBLIC_ENDPOINTS) {
+    const probe = await probeEndpoint(ep);
+    tried.push({ name: probe.name, url: probe.url, ok: probe.ok, ms: probe.ms, error: probe.error });
+    if (probe.ok) {
+      return json(res, 200, {
+        endpoint: probe.url,
+        name: probe.name,
+        models: probe.models,
+        best: probe.models[0].id,
+        tried,
+      });
+    }
+  }
+  json(res, 502, {
+    error:
+      'None of the keyless endpoints answered just now. They are community-run and come and go — press "Find a working endpoint" to try again, or add a free API key (Gemini/Groq/OpenRouter, no card needed).\n\n' +
+      tried.map((t) => `• ${t.name} (${t.url}): ${t.error || 'failed'}`).join('\n'),
+    tried,
+  });
+}
+
+/** GET /api/providers — preset list + whether the server has its own key. */
+function handleProviders(res) {
+  json(res, 200, {
+    providers: PROVIDERS,
+    serverDefaults: {
+      baseUrl: process.env.AI_BASE_URL || '',
+      model: process.env.AI_MODEL || '',
+      hasKey: Boolean(process.env.AI_API_KEY),
+    },
+  });
+}
+
+/** POST /api/models { baseUrl, apiKey } -> { models: [{id, ...}] } */
+async function handleModels(req, res) {
+  const { baseUrl, apiKey } = await readBody(req);
+  const base = resolveBaseUrl(baseUrl);
+  const headers = {};
+  const key = apiKey || process.env.AI_API_KEY || '';
+  if (key) headers.authorization = `Bearer ${key}`;
+  const data = await getJson(`${base}/models`, headers);
+  let models = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+  models = models
+    .map((m) => (typeof m === 'string' ? { id: m } : m))
+    .filter((m) => m && m.id)
+    .map((m) => ({ id: m.id, name: m.name || m.id, owned_by: m.owned_by || '', context: m.context_length || 0 }));
+  models.sort((a, b) => a.id.localeCompare(b.id));
+  json(res, 200, { models });
+}
+
+/**
+ * POST /api/chat — streams the upstream SSE response back as a normalized SSE
+ * stream: `delta` (text), `reasoning` (chain-of-thought), `error`, `done`.
+ */
+async function handleChat(req, res) {
+  const body = await readBody(req);
+  const requestedBase = resolveBaseUrl(body.baseUrl || process.env.AI_BASE_URL);
+  const apiKey = body.apiKey || process.env.AI_API_KEY || '';
+  // Keyless gateways go down and rate-limit; when asked, try the others too.
+  const candidates = body.failover
+    ? [requestedBase, ...PUBLIC_ENDPOINTS.map((e) => e.url.replace(/\/+$/, ''))].filter(
+        (url, i, all) => all.indexOf(url) === i
+      )
+    : [requestedBase];
+  const problems = [];
+
+  const messages = Array.isArray(body.messages) ? body.messages : [];
+  if (!messages.length) throw Object.assign(new Error('No messages to send.'), { status: 400 });
+
+  const payload = {
+    model: body.model || process.env.AI_MODEL,
+    messages: messages.map((m) => ({
+      role: m.role,
+      content:
+        Array.isArray(m.attachments) && m.attachments.length
+          ? [{ type: 'text', text: String(m.content || '') }].concat(
+              m.attachments
+                .filter((a) => a?.dataUrl)
+                .map((a) => ({ type: 'image_url', image_url: { url: a.dataUrl } }))
+            )
+          : String(m.content ?? ''),
+    })),
+    stream: true,
+  };
+  if (!payload.model) throw Object.assign(new Error('No model selected. Open Settings and pick one.'), { status: 400 });
+  if (typeof body.temperature === 'number') payload.temperature = body.temperature;
+  if (typeof body.maxTokens === 'number' && body.maxTokens > 0) payload.max_tokens = body.maxTokens;
+
+  const headers = { 'content-type': 'application/json', accept: 'text/event-stream' };
+  if (apiKey) headers.authorization = `Bearer ${apiKey}`;
+  if (body.extraHeaders && typeof body.extraHeaders === 'object') Object.assign(headers, body.extraHeaders);
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  let upstream = null;
+  let base = requestedBase;
+
+  for (const candidate of candidates) {
+    base = candidate;
+    let ids = [];
+    if (candidate === requestedBase) {
+      ids = [payload.model];
+      // keyless gateways gate some models behind tokens, so line up alternates
+      if (body.failover) ids = ids.concat(await modelsFor(candidate).catch(() => []));
+    } else {
+      ids = await modelsFor(candidate).catch(() => []);
+      if (!ids.length) {
+        problems.push(`${new URL(candidate).host}: no model list`);
+        continue;
+      }
+    }
+    const attempts = [...new Set(ids.filter(Boolean))].slice(0, 3);
+    const host = new URL(candidate).host;
+
+    for (const model of attempts) {
+      payload.model = model;
+      try {
+        const attempt = await fetch(`${candidate}/chat/completions`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(payload),
+          signal: ctrl.signal,
+        });
+        if (attempt.ok) {
+          upstream = attempt;
+          break;
+        }
+        const message = await describeHttpError(`${candidate}/chat/completions`, attempt);
+        problems.push(`${host} · ${model}: ${message.split('\n')[0]}`);
+        // 5xx / 429 / 404 / 402 / 401: this model (or this host) is no good — try the next one.
+        // anything else (bad request, etc.) is our fault, so stop here.
+        if (/^(500|502|503|504|429|404|401|402|403)$/.test(String(attempt.status))) continue;
+        clearTimeout(timer);
+        throw new Error(message);
+      } catch (err) {
+        if (upstream) break;
+        const friendly =
+          err.name === 'AbortError'
+            ? 'Request timed out.'
+            : err.cause?.code === 'ECONNREFUSED' || /ECONNREFUSED/.test(String(err.message))
+              ? `Could not connect to ${candidate}.`
+              : err.cause?.code === 'ENOTFOUND' || /ENOTFOUND|getaddrinfo/.test(String(err.message))
+                ? `Could not resolve ${host}. Check the endpoint URL and your internet connection.`
+                : err.message;
+        if (!problems.some((p) => p.startsWith(host) && p.includes(model || ''))) {
+          problems.push(`${host} · ${model || '?'}: ${String(friendly).split('\n')[0]}`);
+        }
+        if (err.name !== 'AbortError' && !/^Could not|^Network|^fetch/.test(String(friendly))) {
+          clearTimeout(timer);
+          throw new Error(friendly);
+        }
+        break; // network-level failure: move on to the next endpoint
+      }
+    }
+    if (upstream) break;
+  }
+
+  if (!upstream) {
+    clearTimeout(timer);
+    throw new Error(
+      `Every endpoint failed:\n${problems.map((p) => `• ${p}`).join('\n')}\n\n` +
+        'The keyless gateways are community-run and rate-limit hard. Press "Find a working endpoint" in Settings to switch, or add a free Gemini/Groq/OpenRouter key.'
+    );
+  }
+
+  res.writeHead(200, {
+    'content-type': 'text/event-stream; charset=utf-8',
+    'cache-control': 'no-cache, no-transform',
+    connection: 'keep-alive',
+    'x-accel-buffering': 'no',
+  });
+
+  const send = (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  const sendError = (message) => send('error', { message });
+  const finish = () => {
+    clearTimeout(timer);
+    try {
+      res.end();
+    } catch {
+      /* already closed */
+    }
+  };
+  req.on('close', () => ctrl.abort());
+
+  const contentType = upstream.headers.get('content-type') || '';
+
+  // Some servers (a few Ollama proxies) ignore stream:true and return plain JSON.
+  if (!contentType.includes('event-stream')) {
+    try {
+      const data = await upstream.json();
+      const text = data?.choices?.[0]?.message?.content || data?.message?.content || '';
+      if (text) send('delta', { text });
+      send('done', { finish_reason: data?.choices?.[0]?.finish_reason || 'stop', usage: data?.usage || null });
+    } catch (err) {
+      sendError(`Unexpected response from provider: ${err.message}`);
+    }
+    return finish();
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let usage = null;
+  let finishReason = null;
+
+  try {
+    for await (const chunk of upstream.body) {
+      buffer += decoder.decode(chunk, { stream: true });
+      let idx;
+      while ((idx = buffer.indexOf('\n\n')) !== -1) {
+        const raw = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        const line = raw.split('\n').find((l) => l.startsWith('data:'));
+        if (!line) continue;
+        const data = line.slice(5).trim();
+        if (!data || data === '[DONE]') continue;
+        let evt;
+        try {
+          evt = JSON.parse(data);
+        } catch {
+          continue;
+        }
+        if (evt.usage) usage = evt.usage;
+        const choice = evt.choices?.[0];
+        if (!choice) continue;
+        if (choice.finish_reason) finishReason = choice.finish_reason;
+        const delta = choice.delta || {};
+        const text = typeof delta.content === 'string' ? delta.content : Array.isArray(delta.content) ? delta.content.map((p) => (typeof p === 'string' ? p : p.text || '')).join('') : '';
+        if (text) send('delta', { text });
+        const reasoning = delta.reasoning_content || delta.reasoning;
+        if (typeof reasoning === 'string' && reasoning) send('reasoning', { text: reasoning });
+      }
+    }
+    // flush any trailing event that arrived without a blank line
+    if (buffer.trim()) {
+      const line = buffer.split('\n').find((l) => l.startsWith('data:'));
+      if (line && line.slice(5).trim() && line.slice(5).trim() !== '[DONE]') {
+        try {
+          const evt = JSON.parse(line.slice(5).trim());
+          const delta = evt.choices?.[0]?.delta || {};
+          if (delta.content) send('delta', { text: delta.content });
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    send('done', { finish_reason: finishReason || 'stop', usage });
+  } catch (err) {
+    if (err.name !== 'AbortError') sendError(`Stream interrupted: ${err.message}`);
+    send('done', { finish_reason: 'error' });
+  }
+  finish();
+}
+
+// ------------------------------------------------------------ static server
+
+async function serveStatic(req, res, pathname) {
+  let rel = decodeURIComponent(pathname);
+  if (rel === '/' || rel === '') rel = '/index.html';
+  const filePath = path.join(PUBLIC_DIR, path.normalize(rel).replace(/^(\.\.[/\\])+/, ''));
+  if (!filePath.startsWith(PUBLIC_DIR)) {
+    res.writeHead(403).end('Forbidden');
+    return;
+  }
+  try {
+    const stat = await fsp.stat(filePath);
+    if (stat.isDirectory()) throw new Error('dir');
+    res.writeHead(200, {
+      'content-type': MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
+      'content-length': stat.size,
+      'cache-control': 'no-cache',
+    });
+    if (req.method === 'HEAD') return res.end();
+    fs.createReadStream(filePath).pipe(res);
+  } catch {
+    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end('Not found');
+  }
+}
+
+// ------------------------------------------------------------------- server
+
+const server = http.createServer(async (req, res) => {
+  const { pathname } = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  try {
+    if (pathname === '/api/providers' && req.method === 'GET') return handleProviders(res);
+    if (pathname === '/api/models' && req.method === 'POST') return await handleModels(req, res);
+    if (pathname === '/api/public/discover') return await handleDiscover(res);
+    if (pathname === '/api/public/status') return await handleStatus(res);
+    if (pathname === '/api/chat' && req.method === 'POST') return await handleChat(req, res);
+    if (pathname === '/api/health') return json(res, 200, { ok: true, uptime: process.uptime() });
+    if (pathname.startsWith('/api/')) return json(res, 404, { error: 'Unknown endpoint' });
+    if (req.method === 'GET' || req.method === 'HEAD') return await serveStatic(req, res, pathname);
+    json(res, 405, { error: 'Method not allowed' });
+  } catch (err) {
+    const status = err.status || 502;
+    const message = err.message || 'Unexpected server error';
+    if (res.headersSent) {
+      try {
+        res.write(`event: error\ndata: ${JSON.stringify({ message })}\n\n`);
+        res.end();
+      } catch {
+        /* socket gone */
+      }
+    } else {
+      json(res, status, { error: message });
+    }
+  }
+});
+
+server.listen(PORT, HOST, () => {
+  const shown = HOST === '0.0.0.0' ? 'localhost' : HOST;
+  console.log(`\n  MiniChat running →  http://${shown}:${PORT}`);
+  if (process.env.AI_BASE_URL) console.log(`  Server-side endpoint: ${process.env.AI_BASE_URL}${process.env.AI_MODEL ? ` (${process.env.AI_MODEL})` : ''}`);
+  console.log(`  Pick a provider + add a free API key in Settings (gear icon).\n`);
+});
+
+process.on('SIGINT', () => {
+  server.close(() => process.exit(0));
+});
