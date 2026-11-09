@@ -222,6 +222,151 @@ async function handleModels(req, res) {
   json(res, 200, { models });
 }
 
+/** `http://host:11434/v1` -> `http://host:11434` */
+function originOf(baseUrl) {
+  return String(baseUrl).trim().replace(/\/+$/, '').replace(/\/v1(beta)?$/, '');
+}
+
+const fmtBytes = (n) => {
+  const b = Number(n) || 0;
+  if (!b) return '';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.min(units.length - 1, Math.floor(Math.log(b) / Math.log(1024)));
+  return `${(b / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+};
+
+/**
+ * POST /api/local { baseUrl }
+ * Probes a *local* model server (Ollama, LM Studio, llama.cpp, vLLM…).
+ * Browser pages on https cannot call http://localhost directly (mixed content),
+ * so this runs server-side, on the same machine as the browser.
+ */
+async function handleLocalProbe(req, res) {
+  const { baseUrl } = await readBody(req);
+  const base = resolveBaseUrl(baseUrl);
+  const origin = originOf(base);
+
+  // 1. Ollama native API: /api/tags and /api/ps
+  try {
+    const tags = await getJson(`${origin}/api/tags`, {});
+    const models = Array.isArray(tags?.models) ? tags.models : [];
+    if (models.length || Array.isArray(tags?.models)) {
+      let running = [];
+      try {
+        const ps = await getJson(`${origin}/api/ps`, {});
+        running = (ps?.models || []).map((m) => m.name);
+      } catch {
+        /* older Ollama builds */
+      }
+      return json(res, 200, {
+        kind: 'ollama',
+        origin,
+        models: models.map((m) => ({
+          id: m.name,
+          label: m.name,
+          size: m.size || 0,
+          sizeText: fmtBytes(m.size),
+          params: m.details?.parameter_size || '',
+          quant: m.details?.quantization_level || '',
+          family: m.details?.family || '',
+          running: running.includes(m.name),
+        })),
+      });
+    }
+  } catch {
+    /* not Ollama — fall through */
+  }
+
+  // 2. Plain OpenAI-compatible server
+  const data = await getJson(`${base}/models`, {});
+  const models = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+  json(res, 200, {
+    kind: 'openai',
+    origin,
+    models: models.map((m) => ({
+      id: typeof m === 'string' ? m : m.id,
+      label: typeof m === 'string' ? m : m.id,
+      size: 0,
+      sizeText: '',
+      params: '',
+      quant: '',
+      family: '',
+      running: false,
+    })),
+  });
+}
+
+/**
+ * POST /api/local/pull { baseUrl, model }
+ * Streams Ollama's `ollama pull` progress back as SSE so the UI can show a bar:
+ *   event: progress  data: { status, completed, total, percent }
+ */
+async function handleLocalPull(req, res) {
+  const { baseUrl, model } = await readBody(req);
+  const origin = originOf(resolveBaseUrl(baseUrl));
+  if (!model) throw Object.assign(new Error('No model name given'), { status: 400 });
+
+  const ctrl = new AbortController();
+  let upstream;
+  try {
+    upstream = await fetch(`${origin}/api/pull`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: model, stream: true }),
+      signal: ctrl.signal,
+    });
+  } catch (err) {
+    throw new Error(`Could not reach ${origin}. Is Ollama running? (${err.message})`);
+  }
+  if (!upstream.ok) throw new Error(await describeHttpError(`${origin}/api/pull`, upstream));
+
+  res.writeHead(200, {
+    'content-type': 'text/event-stream; charset=utf-8',
+    'cache-control': 'no-cache, no-transform',
+    connection: 'keep-alive',
+    'x-accel-buffering': 'no',
+  });
+  const send = (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  req.on('close', () => ctrl.abort());
+
+  const decoder = new TextDecoder();
+  let buf = '';
+  try {
+    for await (const chunk of upstream.body) {
+      buf += decoder.decode(chunk, { stream: true });
+      let idx;
+      while ((idx = buf.indexOf('\n')) !== -1) {
+        const line = buf.slice(0, idx).trim();
+        buf = buf.slice(idx + 1);
+        if (!line) continue;
+        let evt;
+        try {
+          evt = JSON.parse(line);
+        } catch {
+          continue;
+        }
+        if (evt.error) {
+          send('error', { message: evt.error });
+          return res.end();
+        }
+        const total = Number(evt.total) || 0;
+        const completed = Number(evt.completed) || 0;
+        send('progress', {
+          status: evt.status || '',
+          digest: evt.digest || '',
+          total,
+          completed,
+          percent: total ? Math.min(100, Math.round((completed / total) * 100)) : 0,
+        });
+      }
+    }
+    send('done', { ok: true });
+  } catch (err) {
+    if (err.name !== 'AbortError') send('error', { message: err.message });
+  }
+  res.end();
+}
+
 /**
  * POST /api/chat — streams the upstream SSE response back as a normalized SSE
  * stream: `delta` (text), `reasoning` (chain-of-thought), `error`, `done`.
@@ -405,6 +550,8 @@ const server = http.createServer(async (req, res) => {
   try {
     if (pathname === '/api/providers' && req.method === 'GET') return handleProviders(res);
     if (pathname === '/api/models' && req.method === 'POST') return await handleModels(req, res);
+    if (pathname === '/api/local' && req.method === 'POST') return await handleLocalProbe(req, res);
+    if (pathname === '/api/local/pull' && req.method === 'POST') return await handleLocalPull(req, res);
     if (pathname === '/api/chat' && req.method === 'POST') return await handleChat(req, res);
     if (pathname === '/api/health') return json(res, 200, { ok: true, uptime: process.uptime() });
     if (pathname.startsWith('/api/')) return json(res, 404, { error: 'Unknown endpoint' });

@@ -98,6 +98,49 @@
       </div>
     </main>
 
+    <!-- ──────────────────────── first-run wizard ───────────────────────── -->
+    <div class="modal-backdrop wizard" id="wizard" hidden>
+      <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="wizardTitle">
+        <div class="modal-head">
+          <h2 id="wizardTitle">How should we run the model?</h2>
+        </div>
+        <div class="modal-body">
+          <p class="wizard-lead">
+            MiniChat is free and works without any API key — the model just has to run somewhere.
+            Pick where. You can change this any time in Settings.
+          </p>
+
+          <div class="wizard-grid">
+            <button class="wiz-card" data-engine="browser">
+              <b>Run it in your browser</b>
+              <span class="wiz-tag">nothing to install · no key</span>
+              <p>Downloads a model once (1–6 GB), then runs on your GPU. Nothing leaves your machine.</p>
+              <span class="wiz-foot" id="wizBrowserFoot">Needs Chrome/Edge with WebGPU</span>
+            </button>
+
+            <button class="wiz-card recommended" data-engine="local">
+              <b>Run it on your machine</b>
+              <span class="wiz-tag">best free quality · no key</span>
+              <p>Ollama runs open models locally, offline, forever. A 70B model on a big PC is serious; an 8B is a handy assistant.</p>
+              <span class="wiz-foot">free · private · needs ~4 GB+ RAM</span>
+            </button>
+
+            <button class="wiz-card" data-engine="api">
+              <b>Use a free API key</b>
+              <span class="wiz-tag">strongest models</span>
+              <p>Gemini, Groq and OpenRouter all have free tiers. Still free, but needs a signup and sends prompts to them.</p>
+              <span class="wiz-foot">best answers · rate limited</span>
+            </button>
+          </div>
+
+          <p class="hint">
+            Honest note: a frontier model like Claude or GPT-5 can't be run for free — it needs a paid API or a
+            server farm. The free routes above are genuinely good, just a tier or two below.
+          </p>
+        </div>
+      </div>
+    </div>
+
     <!-- ───────────────────────── settings modal ────────────────────────── -->
     <div class="modal-backdrop" id="modal" hidden>
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
@@ -109,6 +152,60 @@
         </div>
 
         <div class="modal-body">
+          <section class="field">
+            <label>Where the model runs</label>
+            <div class="engine-grid" id="engineGrid">
+              <button type="button" class="engine-card" data-engine="browser">
+                <b>In your browser</b>
+                <span>Nothing to install. Downloads a model once, then runs it on your GPU. Private by default.</span>
+              </button>
+              <button type="button" class="engine-card" data-engine="local">
+                <b>On your machine</b>
+                <span>Best quality for free. Needs Ollama (2 commands). Runs offline, no account, no key.</span>
+              </button>
+              <button type="button" class="engine-card" data-engine="api">
+                <b>Free API key</b>
+                <span>Strongest models (Gemini, Groq, OpenRouter free tiers). Needs a signup, still free.</span>
+              </button>
+            </div>
+            <p class="hint" id="engineNote"></p>
+            <p class="hint" id="hwNote"></p>
+          </section>
+
+          <!-- ── browser engine ── -->
+          <section class="field panel" id="browserPanel" hidden>
+            <label for="browserModel">Model (runs on your GPU via WebGPU)</label>
+            <select id="browserModel"></select>
+            <div class="progress" id="dlProgress" hidden><div class="bar" id="dlBar"></div></div>
+            <p class="hint" id="dlText"></p>
+            <p class="hint">Downloaded once from Hugging Face, then cached in your browser. No account, no key.</p>
+          </section>
+
+          <!-- ── local engine ── -->
+          <section class="field panel" id="localPanel" hidden>
+            <label for="localBaseUrl">Local server</label>
+            <div class="row">
+              <input id="localBaseUrl" type="text" spellcheck="false" placeholder="http://localhost:11434/v1" />
+              <button class="btn ghost" id="detectLocal" type="button">Detect</button>
+            </div>
+            <div class="chips" id="localModels"></div>
+            <p class="hint" id="localHint"></p>
+            <details class="advanced">
+              <summary>Don't have Ollama yet?</summary>
+              <p class="hint" style="margin-top:10px">
+                Install it from <a href="https://ollama.com/download" target="_blank" rel="noreferrer">ollama.com/download</a>,
+                then run these in a terminal:
+              </p>
+              <div class="code-line"><code>ollama serve</code><button class="btn ghost" data-copy="ollama serve">Copy</button></div>
+              <div class="code-line"><code id="pullCmd">ollama pull llama3.2</code><button class="btn ghost" data-copy="ollama pull llama3.2">Copy</button></div>
+              <p class="hint">Free, no account, runs offline. Bigger models = better answers, more RAM needed.</p>
+            </details>
+            <div class="progress" id="pullProgress" hidden><div class="bar" id="pullBar"></div></div>
+            <p class="hint" id="pullText"></p>
+          </section>
+
+          <!-- ── api engine ── -->
+          <div id="apiPanel">
           <section class="field">
             <label for="providerSelect">Provider</label>
             <select id="providerSelect"></select>
@@ -142,6 +239,7 @@
             <datalist id="modelList"></datalist>
             <p class="hint" id="modelHint">Hit "Fetch models" to list everything available on this endpoint with your key.</p>
           </section>
+          </div>
 
           <details class="advanced">
             <summary>Advanced</summary>

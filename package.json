@@ -32,6 +32,7 @@
     "node": ">=18"
   },
   "devDependencies": {
+    "@mlc-ai/web-llm": "^0.2.87",
     "dompurify": "^3.4.17",
     "esbuild": "^0.28.2",
     "highlight.js": "^11.12.0",

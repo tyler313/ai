@@ -1,13 +1,31 @@
-# MiniChat — a free ChatGPT-style AI chat you run yourself
+# MiniChat — a free ChatGPT-style AI you run yourself, with no API key
 
 A complete, self-hosted chat app with a familiar ChatGPT-style interface: streaming answers,
 markdown + syntax-highlighted code, chat history, light/dark themes, image attachments.
 
-It is **free** because it doesn't ship a model — it talks to any **OpenAI-compatible API**,
-including the ones with genuinely free tiers (Google Gemini, Groq, OpenRouter, Mistral) or a
-model running on your own machine via **Ollama** (free forever, no key, works offline).
+**You can use it without signing up for anything.** On first run it asks where you want the
+model to run, and two of the three options need no account and no API key:
 
-No build step. No runtime dependencies. One `node server.js` and you're chatting.
+| Where the model runs | Sign-up? | Cost | Quality | Best for |
+| --- | --- | --- | --- | --- |
+| **In your browser** (WebGPU) | none | free | 1–8B open models | "just let me chat, install nothing" |
+| **On your machine** (Ollama) | none | free forever, offline | scales with your RAM — 3B → 70B | best free quality, private |
+| **Free API key** (Gemini/Groq/OpenRouter) | free signup | free tier | strongest models available free | best answers, rate limited |
+
+All three are wired in and switchable from Settings. The first two send your prompts nowhere.
+
+> ### The honest bit about "as good as Claude"
+> A frontier model (Claude, GPT-5, Gemini Pro) cannot be run for free — it needs a paid API or a
+> server farm. What you *can* get for free, with no key:
+> - **8B model** (browser or laptop): a fast, helpful assistant — great at drafting, explaining,
+>   simple code. Noticeably below Claude on hard reasoning.
+> - **70B model** on a big machine (~48 GB RAM): genuinely strong, useful for real work, still a
+>   tier under frontier models.
+> - **Free API tiers** (Gemini 2.5 Flash/Pro, Groq): closest to the frontier, but rate limited and
+>   your prompts go to someone else's computer.
+>
+> MiniChat makes all of those one click apart, so you can pick your trade-off instead of being
+> locked into one.
 
 ---
 
@@ -18,51 +36,57 @@ node server.js          # needs Node 18+ (uses built-in fetch)
 # open http://localhost:3000
 ```
 
-1. Click the **gear icon** (Settings).
-2. Pick a provider, paste your API key, press **Fetch models**, choose a model, **Save**.
-3. Type a message. That's it.
+Pick one of the three options in the first-run dialog and you're chatting. No config files, no
+`.env`, no build step, no runtime dependencies.
 
-> The first run opens Settings automatically. Your key is kept in your browser's
-> `localStorage` (or in server env vars) and is only ever sent to the endpoint you chose.
+### Option A — in your browser (nothing to install)
 
-### Try it instantly (no key at all)
+Choose **"Run it in your browser"**, pick a model, send a message. The model downloads once
+(1–6 GB) and is then cached by your browser; from then on it runs on your GPU, offline, and
+nothing leaves your machine.
+
+- Needs **Chrome or Edge 113+** (or Safari 26+) — these have WebGPU.
+- Rough guide: 8 GB RAM → Qwen3 4B; 16 GB → Qwen3 8B / Llama 3.1 8B; weak machine → Qwen3 1.7B.
+
+### Option B — on your machine (best free quality)
 
 ```bash
-node tools/demo-model.js &                                             # fake model on :4010
-AI_BASE_URL=http://localhost:4010/v1 AI_MODEL=demo-model node server.js
+# 1. install Ollama: https://ollama.com/download
+ollama serve                    # usually already running
+ollama pull llama3.2:3b         # 4 GB RAM  — fast
+ollama pull qwen2.5:7b          # 8 GB RAM  — strong all-rounder
+ollama pull deepseek-r1:8b      # 8 GB RAM  — reasoning / maths / code
+ollama pull llama3.3:70b        # 48 GB RAM — best free quality
 ```
 
-That runs a tiny fake "model" so you can see streaming, markdown and code highlighting work
-before you connect a real one.
+In MiniChat choose **"Run it on your machine"** → **Detect**. It lists what you have installed,
+and shows one-click `↓ Install` buttons (with a progress bar) for everything else — it drives
+`ollama pull` for you. Free, offline, private, no account, no key.
 
----
-
-## Free providers
+### Option C — free API key (strongest models)
 
 | Provider | Endpoint (paste into Settings) | Free tier | Card? | Get a key |
 | --- | --- | --- | --- | --- |
 | **Google Gemini** | `https://generativelanguage.googleapis.com/v1beta/openai/` | Generous daily limits, multimodal | No | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
 | **Groq** | `https://api.groq.com/openai/v1` | Fast open models, daily caps | No | [console.groq.com/keys](https://console.groq.com/keys) |
 | **OpenRouter** | `https://openrouter.ai/api/v1` | Dozens of `:free` models | No | [openrouter.ai/keys](https://openrouter.ai/keys) |
-| **Ollama (local)** | `http://localhost:11434/v1` | Unlimited — runs on your machine | No | install [ollama.com](https://ollama.com), then `ollama pull llama3.2` |
-| **Mistral** | `https://api.mistral.ai/v1` | "Free mode" on some models | No | [console.mistral.ai](https://console.mistral.ai/api-keys) |
 | **LM Studio / llama.cpp / vLLM** | `http://localhost:1234/v1` | Free (local) | — | — |
 | **OpenAI** | `https://api.openai.com/v1` | Paid | Yes | [platform.openai.com](https://platform.openai.com/api-keys) |
 
 Anything that speaks `/v1/chat/completions` works — pick **Custom** and paste the base URL.
 
-### Ollama (100% free, private, offline)
+### Try it instantly (no key, no model, no install)
 
 ```bash
-ollama pull llama3.2          # or gemma3, qwen2.5, phi4, deepseek-r1…
-ollama serve                  # already running on most installs
+node tools/demo-model.js &                                             # fake provider on :4010
+node tools/mock-ollama.js &                                            # fake Ollama on :11434
+node server.js
 ```
 
-In Settings: provider **Ollama (local)** → endpoint `http://localhost:11434/v1` → **Fetch models**
-→ pick your model → leave the API key empty → Save.
+The first is a fake API, the second a fake local server, so you can see streaming, markdown and
+the local-model installer working before you connect anything real.
 
 ---
-
 ## Features
 
 - **Streaming answers** — token-by-token, like ChatGPT, with a blinking caret and a Stop button.
@@ -125,6 +149,8 @@ a dozen different backends.
 | --- | --- |
 | `GET /api/providers` | Provider presets + server-side defaults |
 | `POST /api/models` | Lists models available at an endpoint (used by *Fetch models* / *Test connection*) |
+| `POST /api/local` | Probes a **local** server (Ollama `/api/tags`, else `/v1/models`) — the browser can't call `http://localhost` from an https page, so the server does it |
+| `POST /api/local/pull` | Streams `ollama pull` progress to the UI as SSE |
 | `POST /api/chat` | Streams a chat completion as normalized SSE (`delta`, `reasoning`, `error`, `done`) |
 | `GET /api/health` | Liveness check |
 
@@ -138,9 +164,10 @@ public/
   app.js               state, rendering, streaming, settings
   vendor/              marked, highlight.js, DOMPurify (bundled, works offline)
 tools/
-  demo-model.js        fake OpenAI-compatible server for demos
+  demo-model.js        fake OpenAI-compatible server (no-key demo of the API engine)
+  mock-ollama.js       fake Ollama: /api/tags, /api/ps, /api/pull, /v1/chat/completions
   hljs-entry.js        source for the highlight.js bundle
-  smoke-test.mjs       headless jsdom test of the real UI
+  smoke-test.mjs       headless jsdom test of the real UI (29 checks)
 ```
 
 ### Vendored libraries
@@ -161,11 +188,13 @@ The app itself has **no runtime dependencies**.
 ```bash
 node server.js &
 node tools/demo-model.js &
+node tools/mock-ollama.js &
 node tools/smoke-test.mjs
 ```
 
-Boots the real UI in jsdom, sends a message to the demo model and asserts the streamed markdown,
-code highlighting, history and chat switching all behave.
+Boots the real UI in jsdom and drives it: first-run wizard → local engine → Ollama detection →
+one-click model install with progress → streamed markdown answer → in-browser engine (asserts it
+fails gracefully without WebGPU) → free-API engine → theme toggle and history. 29 checks.
 
 ---
 

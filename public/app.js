@@ -16,6 +16,34 @@ const SUGGESTIONS = [
   { title: 'Plan a trip', body: 'Plan a 3-day weekend in Ballarat with a mix of food and history' },
 ];
 
+/* ── Keyless model catalogs ────────────────────────────────────────────────
+   "Browser" models run in the page via WebGPU (web-llm): nothing to install,
+   weights come from Hugging Face, no account. Sorted best-quality first.      */
+const BROWSER_MODELS = [
+  { id: 'Qwen3-8B-q4f16_1-MLC', label: 'Qwen3 8B', size: '~5.2 GB', vram: 6.5, note: 'Strongest thing that fits most GPUs' },
+  { id: 'Llama-3.1-8B-Instruct-q4f16_1-MLC', label: 'Llama 3.1 8B', size: '~4.9 GB', vram: 6.0, note: 'Great all-rounder, very reliable' },
+  { id: 'Qwen2.5-7B-Instruct-q4f16_1-MLC', label: 'Qwen2.5 7B', size: '~4.7 GB', vram: 5.8, note: 'Excellent writing + multilingual' },
+  { id: 'Qwen2.5-Coder-7B-Instruct-q4f16_1-MLC', label: 'Qwen2.5 Coder 7B', size: '~4.7 GB', vram: 5.8, note: 'Best of these for code' },
+  { id: 'DeepSeek-R1-Distill-Qwen-7B-q4f16_1-MLC', label: 'DeepSeek-R1 Distill 7B', size: '~4.7 GB', vram: 5.8, note: 'Reasons step-by-step; slower' },
+  { id: 'Qwen3-4B-q4f16_1-MLC', label: 'Qwen3 4B', size: '~2.9 GB', vram: 3.6, note: 'Good on 8 GB machines' },
+  { id: 'Phi-4-mini-instruct-q4f16_1-MLC', label: 'Phi-4 mini', size: '~2.2 GB', vram: 3.0, note: 'Small but sharp, fast' },
+  { id: 'Qwen3-1.7B-q4f16_1-MLC', label: 'Qwen3 1.7B', size: '~1.3 GB', vram: 2.0, note: 'Fallback for weak/older GPUs' },
+];
+
+/* Ollama models worth installing, with the RAM you roughly need. */
+const LOCAL_MODELS = [
+  { id: 'llama3.2:3b', label: 'Llama 3.2 3B', ram: 4, note: 'Fast, fits almost anything' },
+  { id: 'qwen2.5:7b', label: 'Qwen2.5 7B', ram: 8, note: 'Strong general model' },
+  { id: 'deepseek-r1:8b', label: 'DeepSeek-R1 8B', ram: 8, note: 'Reasoning / maths / code' },
+  { id: 'llama3.1:8b', label: 'Llama 3.1 8B', ram: 8, note: 'Reliable all-rounder' },
+  { id: 'qwen2.5-coder:7b', label: 'Qwen2.5 Coder 7B', ram: 8, note: 'Best free code model' },
+  { id: 'gemma3:12b', label: 'Gemma 3 12B', ram: 12, note: 'Noticeably smarter, needs 12 GB', vision: true },
+  { id: 'qwen2.5:14b', label: 'Qwen2.5 14B', ram: 16, note: 'Great when you have 16 GB free' },
+  { id: 'gpt-oss:20b', label: 'gpt-oss 20B', ram: 16, note: 'Open-weight, strong on tools' },
+  { id: 'deepseek-r1:32b', label: 'DeepSeek-R1 32B', ram: 24, note: 'Serious reasoning, 24 GB' },
+  { id: 'llama3.3:70b', label: 'Llama 3.3 70B', ram: 48, note: 'Best free quality; needs a big machine' },
+];
+
 const HLJS_ALIAS = {
   js: 'javascript', jsx: 'javascript', mjs: 'javascript', cjs: 'javascript', node: 'javascript',
   ts: 'typescript', tsx: 'typescript', py: 'python', py3: 'python', rb: 'ruby',
@@ -34,6 +62,10 @@ const state = load() || {
   activeId: null,
   search: '',
   settings: {
+    engine: '', // '' = not chosen yet, 'browser' | 'local' | 'api'
+    browserModel: '',
+    localBaseUrl: 'http://localhost:11434/v1',
+    localModel: '',
     provider: 'gemini',
     baseUrl: '',
     apiKey: '',
@@ -49,6 +81,7 @@ const state = load() || {
 
 let providers = [];
 let streaming = null; // { convId, msgId, controller }
+const browserEngine = { instance: null, model: '' }; // in-browser web-llm engine
 let pendingAttachments = [];
 let editingMsgId = null;
 
@@ -58,7 +91,9 @@ function load() {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object' || !parsed.settings) return null;
-    parsed.settings = { models: {}, ...parsed.settings };
+    parsed.settings = { engine: '', browserModel: '', localModel: '', localBaseUrl: 'http://localhost:11434/v1', models: {}, ...parsed.settings };
+    // anyone who already configured an endpoint is on the "api" engine
+    if (!parsed.settings.engine && parsed.settings.baseUrl) parsed.settings.engine = 'api';
     return parsed;
   } catch {
     return null;
@@ -79,7 +114,23 @@ function save() {
 
 const settings = () => state.settings;
 const activeConv = () => state.conversations[state.activeId] || null;
-const isConfigured = () => Boolean(settings().baseUrl && settings().model);
+
+/** Everything the chat call needs, resolved from whichever engine is picked. */
+function connection() {
+  const s = settings();
+  if (s.engine === 'local') {
+    return { kind: 'local', baseUrl: s.localBaseUrl || 'http://localhost:11434/v1', apiKey: '', model: s.localModel, label: s.localModel || 'no model' };
+  }
+  if (s.engine === 'browser') {
+    return { kind: 'browser', baseUrl: 'browser', apiKey: '', model: s.browserModel, label: s.browserModel || 'no model' };
+  }
+  return { kind: 'api', baseUrl: s.baseUrl, apiKey: s.apiKey, model: s.model, label: s.model || 'no model' };
+}
+
+const isConfigured = () => {
+  const c = connection();
+  return Boolean(settings().engine && c.model);
+};
 
 // ─────────────────────────────── markdown ─────────────────────────────────
 
@@ -299,7 +350,9 @@ function renderSidebar() {
   }
 
   const badge = $('modelBadge');
-  badge.textContent = isConfigured() ? `${settings().model} · ${hostOf(settings().baseUrl)}` : 'not configured';
+  const conn = connection();
+  const where = { browser: 'in browser', local: 'local', api: hostOf(conn.baseUrl) }[conn.kind] || 'not configured';
+  badge.textContent = isConfigured() ? `${prettyModel(conn.model)} · ${where}` : 'not configured';
   badge.title = badge.textContent;
 }
 
@@ -353,7 +406,7 @@ function heroNode() {
              <b>No model connected yet.</b><br />MiniChat is a free chat UI — it needs an endpoint to talk to.
              Pick a free provider (Google Gemini, Groq, OpenRouter all have free tiers) or point it at a local
              Ollama install, which is free forever and needs no key.
-             <div class="row"><button class="btn primary" id="heroSetup">Connect a model</button></div>
+             <div class="row"><button class="btn primary" id="heroSetup">Choose how to run it</button></div>
            </div>`
     }
     <div class="suggestions">
@@ -369,7 +422,7 @@ function heroNode() {
       $('input').focus();
     })
   );
-  wrap.querySelector('#heroSetup')?.addEventListener('click', () => openModal());
+  wrap.querySelector('#heroSetup')?.addEventListener('click', () => (settings().engine ? openModal() : openWizard()));
   return wrap;
 }
 
@@ -448,11 +501,13 @@ function messageNode(msg, conv) {
   }
 
   // assistant
-  if (msg.reasoning) {
+  const parts = splitThink(msg.content);
+  const reasoning = (msg.reasoning || '') + (msg.reasoning && parts.reasoning ? '\n\n' : '') + parts.reasoning;
+  if (reasoning.trim()) {
     const det = document.createElement('details');
     det.className = 'reasoning';
     det.open = false;
-    det.innerHTML = `<summary>Thinking…</summary><div class="reasoning-body">${escapeHtml(msg.reasoning)}</div>`;
+    det.innerHTML = `<summary>Thinking…</summary><div class="reasoning-body">${escapeHtml(reasoning)}</div>`;
     body.appendChild(det);
   }
 
@@ -476,10 +531,10 @@ function messageNode(msg, conv) {
     });
     err.appendChild(acts);
     body.appendChild(err);
-  } else if (msg.content) {
+  } else if (parts.text) {
     const md = document.createElement('div');
     md.className = 'md';
-    md.innerHTML = renderMarkdown(msg.content);
+    md.innerHTML = renderMarkdown(parts.text);
     decorateCode(md);
     body.appendChild(md);
   } else if (msg.streaming) {
@@ -578,18 +633,39 @@ function buildPayload(conv) {
   return history;
 }
 
+/** Splits DeepSeek-R1 style <think>… blocks out of the visible answer. */
+function splitThink(text) {
+  const out = { reasoning: '', text: '' };
+  let rest = String(text || '');
+  const open = rest.indexOf('<think>');
+  if (open === -1) {
+    out.text = rest;
+    return out;
+  }
+  out.text += rest.slice(0, open);
+  rest = rest.slice(open + 7);
+  const close = rest.indexOf('</think>');
+  if (close === -1) {
+    out.reasoning += rest; // still thinking
+  } else {
+    out.reasoning += rest.slice(0, close);
+    out.text += rest.slice(close + 8);
+  }
+  return out;
+}
+
 async function generate() {
   const conv = activeConv();
   if (!conv || streaming) return;
   if (!isConfigured()) {
-    openModal();
+    settings().engine ? openModal() : openWizard();
     return;
   }
 
-  const s = settings();
-  const msg = { id: uid(), role: 'assistant', content: '', reasoning: '', streaming: true, createdAt: Date.now(), model: s.model };
+  const conn = connection();
+  const msg = { id: uid(), role: 'assistant', content: '', reasoning: '', streaming: true, createdAt: Date.now(), model: conn.model };
   conv.messages.push(msg);
-  conv.model = s.model;
+  conv.model = conn.model;
   touch(conv);
   renderThread();
   setGenerating(true);
@@ -599,14 +675,119 @@ async function generate() {
   streaming = { convId: conv.id, msgId: msg.id, controller };
 
   try {
-    const res = await fetch('/api/chat', {
+    if (conn.kind === 'browser') await runBrowserEngine(conv, msg, controller);
+    else await runServerStream(conn, conv, msg, controller);
+  } catch (err) {
+    if (err.name !== 'AbortError') msg.error = friendlyError(err);
+  } finally {
+    msg.streaming = false;
+    streaming = null;
+    setGenerating(false);
+    if (!msg.error) autoTitle(state.conversations[conv.id] || conv);
+    touch(conv);
+    save();
+    renderThread();
+    renderSidebar();
+  }
+}
+
+/** Shared "paint this streaming message" helper used by every engine. */
+function streamSink(msg) {
+  let raf = null;
+  let status = '';
+
+  const paint = () => {
+    raf = null;
+    const node = $('thread').querySelector(`.msg[data-id="${msg.id}"]`);
+    if (!node) return;
+    const container = node.querySelector('.body');
+    const parts = splitThink(msg.content);
+
+    if (parts.reasoning || msg.reasoning) {
+      let det = container.querySelector('.reasoning');
+      if (!det) {
+        det = document.createElement('details');
+        det.className = 'reasoning';
+        det.open = false;
+        det.innerHTML = '<summary>Thinking…</summary><div class="reasoning-body"></div>';
+        container.prepend(det);
+      }
+      det.querySelector('.reasoning-body').textContent = parts.reasoning || msg.reasoning;
+    }
+
+    if (parts.text) {
+      let md = container.querySelector('.md');
+      if (!md) {
+        container.querySelector('.thinking')?.remove();
+        container.querySelector('.status-line')?.remove();
+        md = document.createElement('div');
+        md.className = 'md';
+        container.appendChild(md);
+      }
+      md.innerHTML = renderMarkdown(parts.text);
+      decorateCode(md);
+      if (msg.streaming) {
+        const caret = document.createElement('span');
+        caret.className = 'caret';
+        md.lastElementChild?.appendChild(caret) ?? md.appendChild(caret);
+      }
+      status = '';
+    } else if (status) {
+      let line = container.querySelector('.status-line');
+      if (!line) {
+        container.querySelector('.thinking')?.remove();
+        line = document.createElement('div');
+        line.className = 'status-line';
+        line.innerHTML = '<span class="spinner"></span><span></span>';
+        container.appendChild(line);
+      }
+      line.lastElementChild.textContent = status;
+    }
+    scrollToBottom();
+  };
+
+  const schedule = () => {
+    if (raf === null) raf = requestAnimationFrame(paint);
+  };
+
+  return {
+    push(text) {
+      msg.content += text || '';
+      schedule();
+    },
+    set(text) {
+      msg.content = text || '';
+      schedule();
+    },
+    reasoning(text) {
+      msg.reasoning = (msg.reasoning || '') + (text || '');
+      schedule();
+    },
+    status(text) {
+      status = text || '';
+      schedule();
+    },
+    error(message) {
+      msg.error = message;
+    },
+    finish() {
+      if (raf !== null) cancelAnimationFrame(raf);
+      paint();
+    },
+  };
+}
+
+/** Streams from the Node proxy (Ollama / LM Studio / any OpenAI-compatible API). */
+async function runServerStream(conn, conv, msg, controller) {
+  const s = settings();
+  const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       signal: controller.signal,
       body: JSON.stringify({
-        baseUrl: s.baseUrl,
-        apiKey: s.apiKey,
-        model: s.model,
+        baseUrl: conn.baseUrl,
+        apiKey: conn.apiKey,
+        model: conn.model,
         temperature: Number(s.temperature),
         maxTokens: Number(s.maxTokens) || 0,
         messages: buildPayload(conv),
@@ -623,45 +804,7 @@ async function generate() {
     let buf = '';
     let raf = null;
 
-    const paint = () => {
-      raf = null;
-      const node = $('thread').querySelector(`.msg[data-id="${msg.id}"]`);
-      if (node) {
-        const container = node.querySelector('.body');
-        let md = container.querySelector('.md');
-        if (!md) {
-          container.querySelector('.thinking')?.remove();
-          md = document.createElement('div');
-          md.className = 'md';
-          container.appendChild(md);
-        }
-        md.innerHTML = renderMarkdown(msg.content);
-        decorateCode(md);
-        const caret = document.createElement('span');
-        caret.className = 'caret';
-        md.lastElementChild?.appendChild(caret) ?? md.appendChild(caret);
-        scrollToBottom();
-      }
-    };
-    const schedule = () => {
-      if (raf === null) raf = requestAnimationFrame(paint);
-    };
-
-    const handleEvent = (event, data) => {
-      if (event === 'delta') {
-        msg.content += data.text || '';
-        schedule();
-      } else if (event === 'reasoning') {
-        msg.reasoning = (msg.reasoning || '') + (data.text || '');
-        const node = $('thread').querySelector(`.msg[data-id="${msg.id}"] .reasoning-body`);
-        if (node) node.textContent = msg.reasoning;
-      } else if (event === 'error') {
-        msg.error = data.message || 'Something went wrong.';
-      } else if (event === 'done') {
-        msg.finishReason = data.finish_reason;
-        if (data.usage) msg.usage = data.usage;
-      }
-    };
+    const sink = streamSink(msg);
 
     while (true) {
       const { value, done } = await reader.read();
@@ -679,31 +822,85 @@ async function generate() {
         }
         if (!data) continue;
         try {
-          handleEvent(event, JSON.parse(data));
+          const parsed = JSON.parse(data);
+          if (event === 'delta') sink.push(parsed.text || '');
+          else if (event === 'reasoning') sink.reasoning(parsed.text || '');
+          else if (event === 'error') sink.error(parsed.message || 'Something went wrong.');
+          else if (event === 'done') {
+            msg.finishReason = parsed.finish_reason;
+            if (parsed.usage) msg.usage = parsed.usage;
+          }
         } catch {
           /* ignore malformed frame */
         }
       }
     }
-    if (raf !== null) cancelAnimationFrame(raf);
-    paint();
-  } catch (err) {
-    if (err.name === 'AbortError') {
-      if (!msg.content) msg.error = null;
-    } else {
-      msg.error = friendlyError(err);
-    }
-  } finally {
-    msg.streaming = false;
-    streaming = null;
-    setGenerating(false);
-    const convNow = state.conversations[conv.id];
-    if (convNow && !msg.error) autoTitle(convNow);
-    touch(conv);
-    save();
-    renderThread();
-    renderSidebar();
+    sink.finish();
+}
+
+/** Runs the model inside the browser (web-llm / WebGPU). No server, no key. */
+async function runBrowserEngine(conv, msg, controller) {
+  const s = settings();
+  const sink = streamSink(msg);
+
+  if (!('gpu' in navigator)) {
+    throw new Error(
+      'This browser has no WebGPU, so the in-browser model cannot run.\n\n' +
+        'Use Chrome or Edge 113+ (or Safari 26+), or switch to "On your machine" (Ollama) in Settings — ' +
+        'that is free too and usually gives better answers.'
+    );
   }
+
+  const status = (text) => {
+    sink.status(text);
+  };
+
+  status('Loading engine…');
+  let webllm;
+  try {
+    webllm = await import('./vendor/web-llm.js');
+  } catch (err) {
+    throw new Error('Could not load the in-browser engine: ' + err.message);
+  }
+
+  if (controller.signal.aborted) return;
+
+  const engine = await webllm.CreateMLCEngine(s.browserModel, {
+    initProgressCallback: (report) => {
+      const pct = report.progress ? Math.round(report.progress * 100) : 0;
+      status(`${report.timeElapsed || ''} ${report.text || 'Loading model'} ${pct ? pct + '%' : ''}`.trim());
+    },
+  });
+  browserEngine.model = s.browserModel;
+  browserEngine.instance = engine;
+
+  const chunks = await engine.chat.completions.create({
+    stream: true,
+    stream_options: { include_usage: true },
+    temperature: Number(s.temperature),
+    max_tokens: Number(s.maxTokens) || 1024,
+    messages: buildPayload(conv).map((m) => ({ role: m.role, content: m.content })),
+  });
+
+  let raw = '';
+  for await (const chunk of chunks) {
+    if (controller.signal.aborted) {
+      try {
+        engine.interruptGenerate();
+      } catch {
+        /* noop */
+      }
+      break;
+    }
+    const delta = chunk?.choices?.[0]?.delta || {};
+    const text = delta.content || '';
+    if (!text) continue;
+    raw += text;
+    const parts = splitThink(raw);
+    if (parts.reasoning !== (msg.reasoning || '')) sink.reasoning(parts.reasoning.slice(msg.reasoning?.length || 0));
+    sink.set(parts.text);
+  }
+  sink.finish();
 }
 
 function friendlyError(err) {
@@ -867,6 +1064,8 @@ function updateProviderNote() {
 
 function fillSettingsForm() {
   const s = settings();
+  $('browserModel').value = s.browserModel || '';
+  $('localBaseUrl').value = s.localBaseUrl || 'http://localhost:11434/v1';
   $('baseUrl').value = s.baseUrl || '';
   $('apiKey').value = s.apiKey || '';
   $('modelInput').value = s.model || '';
@@ -877,6 +1076,7 @@ function fillSettingsForm() {
   $('maxVal').textContent = String(s.maxTokens ?? 0);
   renderModelList();
   updateProviderNote();
+  applyEngineUI();
 }
 
 function renderModelList() {
@@ -893,7 +1093,8 @@ function renderModelList() {
 
 function renderModelSelect(models = settings().models?.[settings().baseUrl] || []) {
   const sel = $('modelSelect');
-  const cur = settings().model;
+  const conn = connection();
+  const cur = conn.model;
   sel.innerHTML = '';
   const known = new Set(models);
   if (cur) known.add(cur);
@@ -906,7 +1107,7 @@ function renderModelSelect(models = settings().models?.[settings().baseUrl] || [
   for (const m of known) {
     const o = document.createElement('option');
     o.value = m;
-    o.textContent = m;
+    o.textContent = prettyModel(m);
     sel.appendChild(o);
   }
   const cfg = document.createElement('option');
@@ -914,6 +1115,7 @@ function renderModelSelect(models = settings().models?.[settings().baseUrl] || [
   cfg.textContent = models.length ? 'Manage models…' : 'Configure a model…';
   sel.appendChild(cfg);
   sel.value = known.has(cur) ? cur : '__settings__';
+  sel.title = `${conn.kind} · ${prettyModel(cur) || 'no model'}`;
 }
 
 function openModal() {
@@ -930,6 +1132,8 @@ function closeModal() {
 
 function saveSettingsForm() {
   const s = settings();
+  s.browserModel = $('browserModel').value;
+  s.localBaseUrl = ($('localBaseUrl').value || '').trim() || 'http://localhost:11434/v1';
   s.provider = $('providerSelect').value;
   s.baseUrl = $('baseUrl').value.trim();
   s.apiKey = $('apiKey').value.trim();
@@ -949,6 +1153,34 @@ async function testConnection() {
   const out = $('testResult');
   out.className = 'test-result';
   out.textContent = 'Checking…';
+
+  if (s.engine === 'browser') {
+    const { gpu, ram } = deviceProfile();
+    const model = BROWSER_MODELS.find((m) => m.id === s.browserModel);
+    if (!gpu) {
+      out.className = 'test-result bad';
+      out.textContent = 'No WebGPU in this browser. Use Chrome/Edge 113+, or switch to "On your machine" (Ollama).';
+      return;
+    }
+    out.className = 'test-result ok';
+    out.textContent = model
+      ? `Ready to download ${model.label} (${model.size}).${ram && model.vram + 2 > ram ? ' This device may be short on memory — a smaller model is safer.' : ''}`
+      : 'Pick a model first.';
+    return;
+  }
+
+  if (s.engine === 'local') {
+    try {
+      const models = await detectLocal();
+      out.className = 'test-result ok';
+      out.textContent = models.length ? `Connected — ${models.length} model(s) installed.` : 'Connected, but no models installed yet.';
+    } catch (err) {
+      out.className = 'test-result bad';
+      out.textContent = err.message;
+    }
+    return;
+  }
+
   try {
     const res = await fetch('/api/models', {
       method: 'POST',
@@ -1007,6 +1239,241 @@ function importAll(file) {
   fr.readAsText(file);
 }
 
+
+// ──────────────────────── engines: browser / local ────────────────────────
+
+const ENGINE_NOTE = {
+  browser:
+    'Runs inside this browser tab — nothing to install, no account, prompts never leave your machine. The first reply waits on a one-time model download, then it is cached.',
+  local:
+    'Ollama runs open models on your own machine: free forever, works offline, no account, no key. Bigger model = better answers, but more RAM needed.',
+  api:
+    'A free provider account (Gemini, Groq, OpenRouter). The strongest models you can get for free, but prompts are sent to them and free tiers are rate limited.',
+};
+
+function prettyModel(id) {
+  if (!id) return '';
+  return BROWSER_MODELS.find((m) => m.id === id)?.label || LOCAL_MODELS.find((m) => m.id === id)?.label || id;
+}
+
+/** Rough guess at what this device can actually run, for recommendations. */
+function deviceProfile() {
+  const cores = navigator.hardwareConcurrency || 0;
+  const ram = Number(navigator.deviceMemory) || 0; // Chrome only, in GB
+  const gpu = 'gpu' in navigator;
+  return { cores, ram, gpu };
+}
+
+function updateHwNote() {
+  const { cores, ram, gpu } = deviceProfile();
+  const bits = [];
+  if (ram) bits.push(`~${ram} GB RAM`);
+  if (cores) bits.push(`${cores} CPU cores`);
+  bits.push(gpu ? 'WebGPU available' : 'no WebGPU in this browser');
+  $('hwNote').textContent = `This device: ${bits.join(' · ')}`;
+  return { cores, ram, gpu };
+}
+
+function applyEngineUI() {
+  const e = settings().engine;
+  document.querySelectorAll('.engine-card').forEach((c) => c.classList.toggle('active', c.dataset.engine === e));
+  $('browserPanel').hidden = e !== 'browser';
+  $('localPanel').hidden = e !== 'local';
+  $('apiPanel').hidden = e !== 'api';
+  $('engineNote').textContent = ENGINE_NOTE[e] || 'Pick where the model should run — you can change this later.';
+  updateHwNote();
+  if (e === 'browser') renderBrowserModels();
+  if (e === 'local') {
+    renderLocalChips(localInstalled);
+    if (!localInstalled.length) $('localHint').textContent = 'Press Detect to look for Ollama on this machine.';
+  }
+}
+
+function renderBrowserModels() {
+  const sel = $('browserModel');
+  const { ram, gpu } = deviceProfile();
+  const fits = (m) => (ram ? m.vram + 2 <= ram : true);
+  const cur = settings().browserModel;
+  sel.innerHTML = '';
+  let firstFit = true;
+  for (const m of BROWSER_MODELS) {
+    const ok = fits(m);
+    const o = document.createElement('option');
+    o.value = m.id;
+    o.textContent = `${m.label} — ${m.size} — ${m.note}` + (ok && firstFit ? '  (best fit here)' : ok ? '' : '  (may not fit)');
+    if (ok && firstFit) firstFit = false;
+    sel.appendChild(o);
+  }
+  if (cur) sel.value = cur;
+  else if (!gpu) $('dlText').textContent = 'This browser has no WebGPU — try Chrome/Edge 113+, or use Ollama instead.';
+  else $('dlText').textContent = 'Nothing to install. The model downloads once, then runs locally on your GPU.';
+}
+
+let localInstalled = [];
+
+function renderLocalChips(installed) {
+  const wrap = $('localModels');
+  wrap.innerHTML = '';
+  const s = settings();
+
+  for (const m of installed) {
+    const chip = document.createElement('button');
+    chip.className = 'chip' + (s.localModel === m.id ? ' active' : '');
+    if (m.running) {
+      const dot = document.createElement('span');
+      dot.className = 'dot';
+      chip.appendChild(dot);
+    }
+    const name = document.createElement('span');
+    name.textContent = m.id;
+    chip.appendChild(name);
+    if (m.sizeText) {
+      const size = document.createElement('small');
+      size.textContent = m.sizeText;
+      chip.appendChild(size);
+    }
+    chip.title = [m.params, m.quant, m.family].filter(Boolean).join(' · ') || m.id;
+    chip.addEventListener('click', () => {
+      s.localModel = m.id;
+      save();
+      renderLocalChips(installed);
+      renderModelSelect();
+      renderSidebar();
+    });
+    wrap.appendChild(chip);
+  }
+
+  const missing = LOCAL_MODELS.filter((r) => !installed.some((m) => m.id === r.id || m.id.startsWith(r.id.split(':')[0])));
+  for (const m of missing) {
+    const chip = document.createElement('button');
+    chip.className = 'chip';
+    const name = document.createElement('span');
+    name.textContent = `↓ ${m.label}`;
+    const size = document.createElement('small');
+    size.textContent = `${m.ram} GB RAM`;
+    chip.append(name, size);
+    chip.title = `${m.note} — needs about ${m.ram} GB RAM`;
+    chip.addEventListener('click', () => installLocal(m.id));
+    wrap.appendChild(chip);
+  }
+}
+
+async function detectLocal({ quiet = false } = {}) {
+  const s = settings();
+  const base = ($('localBaseUrl').value || s.localBaseUrl || '').trim();
+  s.localBaseUrl = base;
+  if (!quiet) $('localHint').textContent = 'Looking for a local model server…';
+  try {
+    const res = await fetch('/api/local', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ baseUrl: base }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    localInstalled = data.models || [];
+    renderLocalChips(localInstalled);
+    if (!quiet) {
+      $('localHint').textContent = localInstalled.length
+        ? `${data.kind === 'ollama' ? 'Ollama' : 'Local server'} found — ${localInstalled.length} model(s) installed.`
+        : 'Connected, but no models installed yet. Use one of the ↓ buttons to install one.';
+    }
+    if (!s.localModel && localInstalled.length) {
+      s.localModel = localInstalled[0].id;
+      save();
+      renderLocalChips(localInstalled);
+      renderModelSelect();
+      renderSidebar();
+    }
+    return localInstalled;
+  } catch (err) {
+    localInstalled = [];
+    renderLocalChips([]);
+    if (!quiet) {
+      $('localHint').innerHTML =
+        `No local server at <code>${escapeHtml(base || '—')}</code>. ` +
+        (base.includes('11434')
+          ? 'Install Ollama from ollama.com/download, run <code>ollama serve</code>, then press Detect again.'
+          : 'Check the address and that the server is running.');
+    }
+    throw err;
+  }
+}
+
+async function installLocal(model) {
+  const bar = $('pullBar');
+  const wrap = $('pullProgress');
+  const text = $('pullText');
+  wrap.hidden = false;
+  bar.style.width = '2%';
+  text.textContent = `Downloading ${model}…`;
+  try {
+    const res = await fetch('/api/local/pull', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ baseUrl: settings().localBaseUrl, model }),
+    });
+    if (!res.ok || !res.body) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buf.indexOf('\n\n')) !== -1) {
+        const raw = buf.slice(0, idx);
+        buf = buf.slice(idx + 2);
+        let event = 'message';
+        let data = '';
+        for (const line of raw.split('\n')) {
+          if (line.startsWith('event:')) event = line.slice(6).trim();
+          else if (line.startsWith('data:')) data += line.slice(5).trim();
+        }
+        if (!data) continue;
+        try {
+          const parsed = JSON.parse(data);
+          if (event === 'progress') {
+            if (parsed.percent) bar.style.width = parsed.percent + '%';
+            if (parsed.status) text.textContent = `${model} — ${parsed.status}${parsed.percent ? ` ${parsed.percent}%` : ''}`;
+          } else if (event === 'error') {
+            throw new Error(parsed.message || 'Download failed');
+          }
+        } catch (err) {
+          if (err.message && !/JSON/.test(err.message)) throw err;
+        }
+      }
+    }
+    bar.style.width = '100%';
+    text.textContent = `${model} installed.`;
+    await detectLocal({ quiet: true });
+    settings().localModel = model;
+    save();
+    renderLocalChips(localInstalled);
+    renderModelSelect();
+    renderSidebar();
+    toast(`${model} is ready`);
+  } catch (err) {
+    text.textContent = err.message;
+    wrap.hidden = true;
+  }
+}
+
+function openWizard() {
+  const { gpu } = deviceProfile();
+  const foot = $('wizBrowserFoot');
+  if (foot) foot.textContent = gpu ? 'works in this browser' : 'needs Chrome/Edge 113+ (no WebGPU here)';
+  $('wizard').hidden = false;
+}
+
+function closeWizard() {
+  $('wizard').hidden = true;
+}
+
 // ─────────────────────────────── wiring ───────────────────────────────────
 
 function closeSidebarMobile() {
@@ -1057,6 +1524,66 @@ function bind() {
     applyTheme();
     save();
   });
+
+  // first-run wizard
+  document.querySelectorAll('.wiz-card').forEach((card) =>
+    card.addEventListener('click', () => {
+      settings().engine = card.dataset.engine;
+      save();
+      closeWizard();
+      openModal();
+      if (card.dataset.engine === 'local') setTimeout(() => detectLocal().catch(() => {}), 50);
+      if (card.dataset.engine === 'browser' && !settings().browserModel) {
+        const { ram } = deviceProfile();
+        const fit = BROWSER_MODELS.find((m) => (ram ? m.vram + 2 <= ram : true)) || BROWSER_MODELS[0];
+        settings().browserModel = fit.id;
+        save();
+      }
+    })
+  );
+  $('wizard').addEventListener('click', (e) => {
+    if (e.target === $('wizard')) $('wizard').hidden = true;
+  });
+
+  // engine picker inside settings
+  document.querySelectorAll('.engine-card').forEach((card) =>
+    card.addEventListener('click', () => {
+      settings().engine = card.dataset.engine;
+      save();
+      applyEngineUI();
+      if (card.dataset.engine === 'local') detectLocal().catch(() => {});
+      if (card.dataset.engine === 'browser' && !settings().browserModel) {
+        const { ram } = deviceProfile();
+        const fit = BROWSER_MODELS.find((m) => (ram ? m.vram + 2 <= ram : true)) || BROWSER_MODELS[0];
+        settings().browserModel = fit.id;
+        save();
+        applyEngineUI();
+      }
+    })
+  );
+  $('browserModel').addEventListener('change', (e) => {
+    settings().browserModel = e.target.value;
+    save();
+    renderModelSelect();
+    renderSidebar();
+  });
+  $('localBaseUrl').addEventListener('change', (e) => {
+    settings().localBaseUrl = e.target.value.trim();
+    save();
+  });
+  $('detectLocal').addEventListener('click', () => detectLocal().catch(() => {}));
+  document.querySelectorAll('[data-copy]').forEach((btn) =>
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(btn.dataset.copy);
+        const was = btn.textContent;
+        btn.textContent = 'Copied';
+        setTimeout(() => (btn.textContent = was), 1200);
+      } catch {
+        toast('Clipboard blocked by the browser');
+      }
+    })
+  );
 
   $('openSettings').addEventListener('click', openModal);
   $('topSettings').addEventListener('click', openModal);
@@ -1152,7 +1679,8 @@ function bind() {
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      if (!$('modal').hidden) closeModal();
+      if (!$('wizard').hidden) closeWizard();
+      else if (!$('modal').hidden) closeModal();
       else if (streaming) abortGeneration();
     }
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -1182,7 +1710,7 @@ async function boot() {
   renderModelSelect();
   autoGrow();
   $('input').focus();
-  if (!isConfigured()) setTimeout(openModal, 400);
+  if (!isConfigured()) setTimeout(() => (settings().engine ? openModal() : openWizard()), 400);
 }
 
 boot();
