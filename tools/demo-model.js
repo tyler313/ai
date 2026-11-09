@@ -29,14 +29,13 @@ def answer(question: str) -> str:
     return llm.complete(question)
 \`\`\`
 
-| Provider | Free tier | Card needed |
+| Route | Sign-up | Quality |
 | --- | --- | --- |
-| Google Gemini | yes | no |
-| Groq | yes | no |
-| OpenRouter | yes | no |
-| Ollama (local) | always free | no |
+| Keyless endpoints | none | strong open models |
+| Free API key (Gemini/Groq) | free | closest to frontier |
+| In your browser | none | private, smaller models |
 
-To switch: open **Settings** (gear icon), pick a provider, paste your free key, hit *Fetch models*, choose one, Save.`,
+To switch: open **Settings** (gear icon) and pick a different engine.`,
 ];
 
 const sse = (obj) => `data: ${JSON.stringify(obj)}\n\n`;

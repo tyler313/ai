@@ -1,31 +1,31 @@
-# MiniChat — a free ChatGPT-style AI you run yourself, with no API key
+# MiniChat — a free ChatGPT-style AI you run yourself
 
 A complete, self-hosted chat app with a familiar ChatGPT-style interface: streaming answers,
 markdown + syntax-highlighted code, chat history, light/dark themes, image attachments.
 
-**You can use it without signing up for anything.** On first run it asks where you want the
-model to run, and two of the three options need no account and no API key:
+**Open it and chat.** On first run it offers three ways to get a model behind the UI — and the
+default one needs no account, no API key and no install:
 
-| Where the model runs | Sign-up? | Cost | Quality | Best for |
-| --- | --- | --- | --- | --- |
-| **In your browser** (WebGPU) | none | free | 1–8B open models | "just let me chat, install nothing" |
-| **On your machine** (Ollama) | none | free forever, offline | scales with your RAM — 3B → 70B | best free quality, private |
-| **Free API key** (Gemini/Groq/OpenRouter) | free signup | free tier | strongest models available free | best answers, rate limited |
+| Option | Sign-up | Quality | Trade-off |
+| --- | --- | --- | --- |
+| **Keyless** (default) | **none** | strong open models — DeepSeek V4 Pro, GLM-5.2, MiniMax-M3, Gemma 4 | community endpoints; rate limited, model list rotates |
+| **Free API key** | free, ~30 s | closest to frontier (Gemini 2.5 Pro/Flash, Groq) | prompts go to that provider; free tiers are rate limited |
+| **In your browser** | **none** | up to 8B (Qwen3 8B, Llama 3.1 8B) | private & offline, but the models are smaller |
 
-All three are wired in and switchable from Settings. The first two send your prompts nowhere.
+All three are one click apart in Settings. Nothing needs installing on your machine apart from
+Node, and there is no build step and no runtime dependencies.
 
 > ### The honest bit about "as good as Claude"
-> A frontier model (Claude, GPT-5, Gemini Pro) cannot be run for free — it needs a paid API or a
-> server farm. What you *can* get for free, with no key:
-> - **8B model** (browser or laptop): a fast, helpful assistant — great at drafting, explaining,
->   simple code. Noticeably below Claude on hard reasoning.
-> - **70B model** on a big machine (~48 GB RAM): genuinely strong, useful for real work, still a
->   tier under frontier models.
-> - **Free API tiers** (Gemini 2.5 Flash/Pro, Groq): closest to the frontier, but rate limited and
->   your prompts go to someone else's computer.
+> Nobody hands out a frontier model for free — running one costs real money per message. So:
+> - **Keyless endpoints** are the best "no signup" deal: they serve today's strong open models
+>   (DeepSeek V4 Pro, GLM-5.2, MiniMax-M3, Gemma 4 31B) with 30–60 requests/minute and no key.
+>   Quality is good — well above a small local model — but a tier below Claude/GPT-5, and these
+>   are community-run, so they come and go.
+> - **A free Gemini key** (no card) gets you Gemini 2.5 Pro/Flash, which is the closest you can
+>   legally get to frontier quality for £0. Rate limited, and Google can use free-tier content.
+> - **In-browser models** are private and offline but capped at ~8B, so they're the weakest here.
 >
-> MiniChat makes all of those one click apart, so you can pick your trade-off instead of being
-> locked into one.
+> The app says this on the first-run screen rather than overselling it, and switching is one click.
 
 ---
 
@@ -36,59 +36,55 @@ node server.js          # needs Node 18+ (uses built-in fetch)
 # open http://localhost:3000
 ```
 
-Pick one of the three options in the first-run dialog and you're chatting. No config files, no
-`.env`, no build step, no runtime dependencies.
+Pick **"Start chatting — no signup"** and you're talking to a model in about two seconds.
 
-### Option A — in your browser (nothing to install)
+### How the keyless option works
 
-Choose **"Run it in your browser"**, pick a model, send a message. The model downloads once
-(1–6 GB) and is then cached by your browser; from then on it runs on your GPU, offline, and
-nothing leaves your machine.
+Keyless gateways are community projects that expose an OpenAI-compatible API with no
+authentication (e.g. [LLM7.io](https://api.llm7.io/v1),
+[Pollinations](https://text.pollinations.ai/openai)). Because they rotate models and sometimes
+go down, MiniChat doesn't hard-code one:
 
-- Needs **Chrome or Edge 113+** (or Safari 26+) — these have WebGPU.
-- Rough guide: 8 GB RAM → Qwen3 4B; 16 GB → Qwen3 8B / Llama 3.1 8B; weak machine → Qwen3 1.7B.
+- the server probes a list of endpoints and uses **whichever answers right now**
+  (`GET /api/public/discover`);
+- the UI shows **"Find a working endpoint"** — press it any time to re-probe and switch;
+- the model dropdown is filled from that endpoint's live `/v1/models`, best-scoring model first;
+- if one 429s or dies, the error tells you to re-probe or drop in a free key.
 
-### Option B — on your machine (best free quality)
+Set your own list with `PUBLIC_ENDPOINTS="https://a/v1,https://b/v1"`.
 
-```bash
-# 1. install Ollama: https://ollama.com/download
-ollama serve                    # usually already running
-ollama pull llama3.2:3b         # 4 GB RAM  — fast
-ollama pull qwen2.5:7b          # 8 GB RAM  — strong all-rounder
-ollama pull deepseek-r1:8b      # 8 GB RAM  — reasoning / maths / code
-ollama pull llama3.3:70b        # 48 GB RAM — best free quality
-```
+### Switching to the best free quality
 
-In MiniChat choose **"Run it on your machine"** → **Detect**. It lists what you have installed,
-and shows one-click `↓ Install` buttons (with a progress bar) for everything else — it drives
-`ollama pull` for you. Free, offline, private, no account, no key.
+Settings → **Free API key** → pick a provider → paste a key → **Fetch models** → Save:
 
-### Option C — free API key (strongest models)
-
-| Provider | Endpoint (paste into Settings) | Free tier | Card? | Get a key |
+| Provider | Endpoint | Free tier | Card? | Get a key |
 | --- | --- | --- | --- | --- |
-| **Google Gemini** | `https://generativelanguage.googleapis.com/v1beta/openai/` | Generous daily limits, multimodal | No | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
-| **Groq** | `https://api.groq.com/openai/v1` | Fast open models, daily caps | No | [console.groq.com/keys](https://console.groq.com/keys) |
+| **Google Gemini** | `https://generativelanguage.googleapis.com/v1beta/openai/` | Generous, multimodal | No | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
+| **Groq** | `https://api.groq.com/openai/v1` | Very fast open models | No | [console.groq.com/keys](https://console.groq.com/keys) |
 | **OpenRouter** | `https://openrouter.ai/api/v1` | Dozens of `:free` models | No | [openrouter.ai/keys](https://openrouter.ai/keys) |
-| **LM Studio / llama.cpp / vLLM** | `http://localhost:1234/v1` | Free (local) | — | — |
-| **OpenAI** | `https://api.openai.com/v1` | Paid | Yes | [platform.openai.com](https://platform.openai.com/api-keys) |
+| **Custom** | any `/v1/chat/completions` | — | — | — |
 
-Anything that speaks `/v1/chat/completions` works — pick **Custom** and paste the base URL.
+### Private / offline
 
-### Try it instantly (no key, no model, no install)
+Settings → **In your browser** → pick a model (Qwen3 8B, Llama 3.1 8B, Qwen2.5 Coder 7B…).
+Weights download once from Hugging Face, then run on your GPU via WebGPU — nothing leaves the
+machine. Needs Chrome/Edge 113+ or Safari 26+.
+
+### Try it instantly (fake backend)
 
 ```bash
-node tools/demo-model.js &                                             # fake provider on :4010
-node tools/mock-ollama.js &                                            # fake Ollama on :11434
-node server.js
+node tools/demo-model.js &                                   # fake provider on :4010
+PUBLIC_ENDPOINTS=http://localhost:4010/v1 node server.js     # pretend it's a keyless endpoint
 ```
 
-The first is a fake API, the second a fake local server, so you can see streaming, markdown and
-the local-model installer working before you connect anything real.
+Now the keyless flow, discovery and streaming all work against a canned model — useful for
+seeing the UI before you connect anything real.
 
 ---
 ## Features
 
+- **Keyless by default** — no account, no key: community endpoints are probed and the best model
+  auto-selected, with one-click re-discovery when one goes down.
 - **Streaming answers** — token-by-token, like ChatGPT, with a blinking caret and a Stop button.
 - **Markdown** — headings, lists, tables, links, blockquotes, inline code.
 - **Code blocks** — syntax highlighting (35 languages), one-click copy, language label.
@@ -149,8 +145,7 @@ a dozen different backends.
 | --- | --- |
 | `GET /api/providers` | Provider presets + server-side defaults |
 | `POST /api/models` | Lists models available at an endpoint (used by *Fetch models* / *Test connection*) |
-| `POST /api/local` | Probes a **local** server (Ollama `/api/tags`, else `/v1/models`) — the browser can't call `http://localhost` from an https page, so the server does it |
-| `POST /api/local/pull` | Streams `ollama pull` progress to the UI as SSE |
+| `GET /api/public/discover` | Probes the keyless endpoints, returns the first that answers plus its model list ranked best-first |
 | `POST /api/chat` | Streams a chat completion as normalized SSE (`delta`, `reasoning`, `error`, `done`) |
 | `GET /api/health` | Liveness check |
 
@@ -164,10 +159,9 @@ public/
   app.js               state, rendering, streaming, settings
   vendor/              marked, highlight.js, DOMPurify (bundled, works offline)
 tools/
-  demo-model.js        fake OpenAI-compatible server (no-key demo of the API engine)
-  mock-ollama.js       fake Ollama: /api/tags, /api/ps, /api/pull, /v1/chat/completions
+  demo-model.js        fake OpenAI-compatible server (no-key demo backend)
   hljs-entry.js        source for the highlight.js bundle
-  smoke-test.mjs       headless jsdom test of the real UI (29 checks)
+  smoke-test.mjs       headless jsdom test of the real UI (31 checks)
 ```
 
 ### Vendored libraries
@@ -186,15 +180,14 @@ The app itself has **no runtime dependencies**.
 ## Tests
 
 ```bash
-node server.js &
 node tools/demo-model.js &
-node tools/mock-ollama.js &
+PUBLIC_ENDPOINTS=http://localhost:4010/v1 node server.js &
 node tools/smoke-test.mjs
 ```
 
-Boots the real UI in jsdom and drives it: first-run wizard → local engine → Ollama detection →
-one-click model install with progress → streamed markdown answer → in-browser engine (asserts it
-fails gracefully without WebGPU) → free-API engine → theme toggle and history. 29 checks.
+Boots the real UI in jsdom and drives it: first-run wizard → keyless discovery → model
+auto-selection → streamed markdown answer with highlighted code → in-browser engine (asserts it
+fails gracefully without WebGPU) → free-API-key engine → theme toggle and history. 31 checks.
 
 ---
 
@@ -206,7 +199,8 @@ fails gracefully without WebGPU) → free-API engine → theme toggle and histor
 | `401 Rejected` | Key is wrong/expired, or pasted with a space |
 | `404 Not found` | Check the endpoint URL and model name (*Fetch models* shows valid names) |
 | `429 Rate limited` | Free tiers cap requests/minute & day — wait, or switch provider |
-| "Couldn't connect" (Ollama/LM Studio) | The local server isn't running, or the port differs |
+| "Couldn't connect" (LM Studio / llama.cpp) | The local server isn't running, or the port differs |
+| Keyless endpoint keeps failing | Press **Find a working endpoint**, or switch to a free Gemini/Groq key |
 | Model answers but text isn't highlighted | Only bundled languages highlight; it still renders as plain code |
 
 ---

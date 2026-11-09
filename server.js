@@ -6,8 +6,8 @@
  *   2. proxies chat requests to any OpenAI-compatible endpoint (streaming)
  *
  * Why a proxy? It keeps API keys off the page, dodges browser CORS problems,
- * and lets the same UI talk to Gemini, Groq, OpenRouter, Ollama, LM Studio,
- * llama.cpp, vLLM ... anything that speaks /v1/chat/completions.
+ * and lets the same UI talk to keyless gateways, Gemini, Groq, OpenRouter,
+ * LM Studio, llama.cpp, vLLM — anything that speaks /v1/chat/completions.
  *
  * Run:  node server.js            (then open http://localhost:3000)
  * Env:  PORT, HOST, AI_BASE_URL, AI_API_KEY, AI_MODEL
@@ -51,20 +51,13 @@ const PROVIDERS = [
     note: 'One key, dozens of ":free" models. 50 req/day on the free tier.',
   },
   {
-    id: 'ollama',
-    name: 'Ollama (local)',
-    baseUrl: 'http://localhost:11434/v1',
-    model: 'llama3.2',
-    keyUrl: 'https://ollama.com/download',
-    note: 'Runs on your own machine. 100% free, no key, works offline.',
-  },
-  {
-    id: 'lmstudio',
-    name: 'LM Studio (local)',
-    baseUrl: 'http://localhost:1234/v1',
-    model: 'local-model',
-    keyUrl: 'https://lmstudio.ai/',
-    note: 'Local model server, OpenAI-compatible.',
+    id: 'keyless',
+    name: 'No signup (keyless endpoints)',
+    baseUrl: '',
+    model: '',
+    keyUrl: '',
+    keyless: true,
+    note: 'Community endpoints that need no account. Press "Find a working endpoint" — models rotate and are rate limited.',
   },
   {
     id: 'openai',
@@ -167,7 +160,7 @@ async function describeHttpError(url, res) {
     429: 'Rate limited (429) — free tiers cap requests per minute/day. Wait a bit or switch provider.',
     500: 'Upstream server error (500).',
     502: 'Bad gateway (502) — the provider is having a moment. Try again.',
-    503: 'Service unavailable (503) — provider overloaded or model still loading (Ollama does this).',
+    503: 'Service unavailable (503) — provider overloaded or the model is still loading.',
   };
   const prefix = hints[res.status] || `Request failed (${res.status})`;
   return `${prefix}${detail ? `\n\n${detail}` : ''}\n\n${new URL(url).host}`;
@@ -176,9 +169,9 @@ async function describeHttpError(url, res) {
 const TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 5 * 60 * 1000);
 
 /** GET helper with a timeout; returns parsed JSON or throws a friendly Error. */
-async function getJson(url, headers) {
+async function getJson(url, headers, timeoutMs = TIMEOUT_MS) {
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetch(url, { headers, signal: ctrl.signal });
     if (!res.ok) throw new Error(await describeHttpError(url, res));
@@ -192,6 +185,68 @@ async function getJson(url, headers) {
 }
 
 // ------------------------------------------------------------------- routes
+
+
+/* ── Keyless endpoints ───────────────────────────────────────────────────────
+   Community gateways that answer /v1/models and /v1/chat/completions without
+   any key. They rotate models and rate-limit hard, so the app probes them in
+   order and uses whichever answers. Override with PUBLIC_ENDPOINTS="a,b,c".  */
+const PUBLIC_ENDPOINTS = (process.env.PUBLIC_ENDPOINTS
+  ? process.env.PUBLIC_ENDPOINTS.split(',').map((u, i) => ({ name: `endpoint ${i + 1}`, url: u.trim() }))
+  : [
+      { name: 'LLM7.io', url: 'https://api.llm7.io/v1' },
+      { name: 'Pollinations', url: 'https://text.pollinations.ai/openai' },
+      { name: 'OVHcloud', url: 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1' },
+    ]
+).filter((e) => e.url);
+
+/** Rough "how good is this model name" guess, used to auto-pick the best. */
+function scoreModel(id) {
+  const m = String(id || '').toLowerCase();
+  let score = 0;
+  if (/embed|embedding|image|dall|tts|whisper|rerank|moderat|vision|video|audio|sd-|\/draw|flux|sana/.test(m)) return -100;
+  if (/\b(pro|max|ultra|opus|large)\b/.test(m)) score += 6;
+  if (/(^|[^a-z])v?([45])(\.\d+)?(-|$)|\bm3\b|k2|glm-5/.test(m)) score += 5;
+  if (/31b|30b|32b|70b|72b|120b|235b/.test(m)) score += 3;
+  if (/20b|24b|27b/.test(m)) score += 2;
+  if (/(^|[^a-z])turbo|flash|mini|small|nano|lite|tiny/.test(m)) score -= 2;
+  if (/1b$|0\.5b|1\.5b|3b|4b|7b|8b/.test(m)) score -= 3;
+  if (/-free$|:free$/.test(m)) score += 1;
+  return score;
+}
+
+/**
+ * GET /api/public/discover
+ * Finds a keyless endpoint that answers right now and returns its model list,
+ * best model first. Without this the browser would have to guess URLs that
+ * change every few weeks.
+ */
+async function handleDiscover(res) {
+  const problems = [];
+  for (const ep of PUBLIC_ENDPOINTS) {
+    try {
+      const data = await getJson(`${ep.url.replace(/\/+$/, '')}/models`, {}, 8000);
+      const raw = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+      const models = raw
+        .map((m) => (typeof m === 'string' ? { id: m } : m))
+        .filter((m) => m && m.id)
+        .map((m) => ({ id: m.id, context: m.context_length || m.context || 0 }))
+        .sort((a, b) => scoreModel(b.id) - scoreModel(a.id) || a.id.localeCompare(b.id));
+      if (!models.length) {
+        problems.push(`${ep.name}: no models listed`);
+        continue;
+      }
+      return json(res, 200, { endpoint: ep.url, name: ep.name, models, best: models[0].id });
+    } catch (err) {
+      problems.push(`${ep.name}: ${String(err.message).split('\n')[0].slice(0, 120)}`);
+    }
+  }
+  json(res, 502, {
+    error:
+      'None of the keyless endpoints answered right now. They are community-run and come and go — try again in a minute, or use a free API key (Gemini/Groq/OpenRouter, no card needed).\n\n' +
+      problems.map((p) => `• ${p}`).join('\n'),
+  });
+}
 
 /** GET /api/providers — preset list + whether the server has its own key. */
 function handleProviders(res) {
@@ -220,151 +275,6 @@ async function handleModels(req, res) {
     .map((m) => ({ id: m.id, name: m.name || m.id, owned_by: m.owned_by || '', context: m.context_length || 0 }));
   models.sort((a, b) => a.id.localeCompare(b.id));
   json(res, 200, { models });
-}
-
-/** `http://host:11434/v1` -> `http://host:11434` */
-function originOf(baseUrl) {
-  return String(baseUrl).trim().replace(/\/+$/, '').replace(/\/v1(beta)?$/, '');
-}
-
-const fmtBytes = (n) => {
-  const b = Number(n) || 0;
-  if (!b) return '';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.min(units.length - 1, Math.floor(Math.log(b) / Math.log(1024)));
-  return `${(b / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
-};
-
-/**
- * POST /api/local { baseUrl }
- * Probes a *local* model server (Ollama, LM Studio, llama.cpp, vLLM…).
- * Browser pages on https cannot call http://localhost directly (mixed content),
- * so this runs server-side, on the same machine as the browser.
- */
-async function handleLocalProbe(req, res) {
-  const { baseUrl } = await readBody(req);
-  const base = resolveBaseUrl(baseUrl);
-  const origin = originOf(base);
-
-  // 1. Ollama native API: /api/tags and /api/ps
-  try {
-    const tags = await getJson(`${origin}/api/tags`, {});
-    const models = Array.isArray(tags?.models) ? tags.models : [];
-    if (models.length || Array.isArray(tags?.models)) {
-      let running = [];
-      try {
-        const ps = await getJson(`${origin}/api/ps`, {});
-        running = (ps?.models || []).map((m) => m.name);
-      } catch {
-        /* older Ollama builds */
-      }
-      return json(res, 200, {
-        kind: 'ollama',
-        origin,
-        models: models.map((m) => ({
-          id: m.name,
-          label: m.name,
-          size: m.size || 0,
-          sizeText: fmtBytes(m.size),
-          params: m.details?.parameter_size || '',
-          quant: m.details?.quantization_level || '',
-          family: m.details?.family || '',
-          running: running.includes(m.name),
-        })),
-      });
-    }
-  } catch {
-    /* not Ollama — fall through */
-  }
-
-  // 2. Plain OpenAI-compatible server
-  const data = await getJson(`${base}/models`, {});
-  const models = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
-  json(res, 200, {
-    kind: 'openai',
-    origin,
-    models: models.map((m) => ({
-      id: typeof m === 'string' ? m : m.id,
-      label: typeof m === 'string' ? m : m.id,
-      size: 0,
-      sizeText: '',
-      params: '',
-      quant: '',
-      family: '',
-      running: false,
-    })),
-  });
-}
-
-/**
- * POST /api/local/pull { baseUrl, model }
- * Streams Ollama's `ollama pull` progress back as SSE so the UI can show a bar:
- *   event: progress  data: { status, completed, total, percent }
- */
-async function handleLocalPull(req, res) {
-  const { baseUrl, model } = await readBody(req);
-  const origin = originOf(resolveBaseUrl(baseUrl));
-  if (!model) throw Object.assign(new Error('No model name given'), { status: 400 });
-
-  const ctrl = new AbortController();
-  let upstream;
-  try {
-    upstream = await fetch(`${origin}/api/pull`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: model, stream: true }),
-      signal: ctrl.signal,
-    });
-  } catch (err) {
-    throw new Error(`Could not reach ${origin}. Is Ollama running? (${err.message})`);
-  }
-  if (!upstream.ok) throw new Error(await describeHttpError(`${origin}/api/pull`, upstream));
-
-  res.writeHead(200, {
-    'content-type': 'text/event-stream; charset=utf-8',
-    'cache-control': 'no-cache, no-transform',
-    connection: 'keep-alive',
-    'x-accel-buffering': 'no',
-  });
-  const send = (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-  req.on('close', () => ctrl.abort());
-
-  const decoder = new TextDecoder();
-  let buf = '';
-  try {
-    for await (const chunk of upstream.body) {
-      buf += decoder.decode(chunk, { stream: true });
-      let idx;
-      while ((idx = buf.indexOf('\n')) !== -1) {
-        const line = buf.slice(0, idx).trim();
-        buf = buf.slice(idx + 1);
-        if (!line) continue;
-        let evt;
-        try {
-          evt = JSON.parse(line);
-        } catch {
-          continue;
-        }
-        if (evt.error) {
-          send('error', { message: evt.error });
-          return res.end();
-        }
-        const total = Number(evt.total) || 0;
-        const completed = Number(evt.completed) || 0;
-        send('progress', {
-          status: evt.status || '',
-          digest: evt.digest || '',
-          total,
-          completed,
-          percent: total ? Math.min(100, Math.round((completed / total) * 100)) : 0,
-        });
-      }
-    }
-    send('done', { ok: true });
-  } catch (err) {
-    if (err.name !== 'AbortError') send('error', { message: err.message });
-  }
-  res.end();
 }
 
 /**
@@ -418,7 +328,7 @@ async function handleChat(req, res) {
       err.name === 'AbortError'
         ? 'Request timed out.'
         : err.cause?.code === 'ECONNREFUSED' || /ECONNREFUSED/.test(String(err.message))
-          ? `Could not connect to ${base}. If this is a local server (Ollama, LM Studio) make sure it is running.`
+          ? `Could not connect to ${base}. If this is a local server (LM Studio, llama.cpp) make sure it is running.`
           : err.cause?.code === 'ENOTFOUND' || /ENOTFOUND|getaddrinfo/.test(String(err.message))
             ? `Could not resolve ${new URL(base).host}. Check the endpoint URL and your internet connection.`
             : `Network error: ${err.message}`;
@@ -550,8 +460,7 @@ const server = http.createServer(async (req, res) => {
   try {
     if (pathname === '/api/providers' && req.method === 'GET') return handleProviders(res);
     if (pathname === '/api/models' && req.method === 'POST') return await handleModels(req, res);
-    if (pathname === '/api/local' && req.method === 'POST') return await handleLocalProbe(req, res);
-    if (pathname === '/api/local/pull' && req.method === 'POST') return await handleLocalPull(req, res);
+    if (pathname === '/api/public/discover') return await handleDiscover(res);
     if (pathname === '/api/chat' && req.method === 'POST') return await handleChat(req, res);
     if (pathname === '/api/health') return json(res, 200, { ok: true, uptime: process.uptime() });
     if (pathname.startsWith('/api/')) return json(res, 404, { error: 'Unknown endpoint' });

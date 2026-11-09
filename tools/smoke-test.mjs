@@ -67,55 +67,37 @@ await wait(700);
 check('server reachable', (await fetch(BASE + '/api/health')).ok);
 check('first-run wizard shown', !$('wizard').hidden);
 check('wizard offers 3 ways to run', doc.querySelectorAll('.wiz-card').length === 3);
-check('no API key needed for local option', /no key/i.test(doc.querySelector('.wiz-card[data-engine="local"]').textContent));
+check('keyless option needs no key', /no key/i.test(doc.querySelector('.wiz-card[data-engine="keyless"]').textContent));
 
-// ── 2. local engine (Ollama) ────────────────────────────────────────────────
-click(doc.querySelector('.wiz-card[data-engine="local"]'));
-await wait(900); // auto-detect runs on selection
+// ── 2. keyless engine (no signup) ───────────────────────────────────────────
+click(doc.querySelector('.wiz-card[data-engine="keyless"]'));
+await wait(1200); // discovery runs on selection
 check('wizard closed, settings opened', $('wizard').hidden && !$('modal').hidden);
-check('local panel visible', !$('localPanel').hidden && $('apiPanel').hidden);
-check('Ollama detected', /Ollama found/.test($('localHint').textContent), $('localHint').textContent);
-const installedChips = [...doc.querySelectorAll('#localModels .chip')].map((c) => c.textContent);
-check('installed models listed', installedChips.some((t) => t.includes('llama3.2:3b')), installedChips.join(' | '));
-check('recommended models offered for install', installedChips.some((t) => t.startsWith('↓')), installedChips.join(' | '));
-check('a local model auto-selected', /llama3\.2/.test($('modelSelect').value), $('modelSelect').value);
+check('keyless endpoint discovered', /Connected to/.test($('endpointHint').textContent), $('endpointHint').textContent);
+check('model auto-selected', $('modelSelect').value === 'demo-model', $('modelSelect').value);
+check('API key field hidden for keyless', $('keyField').hidden === true);
+check('find-endpoint button visible', $('findEndpoint').hidden === false);
 
-// install another model through the UI
-const installChip = [...doc.querySelectorAll('#localModels .chip')].find((c) => c.textContent.startsWith('↓'));
-check('install chip present', !!installChip);
-if (installChip) {
-  const before = doc.querySelectorAll('#localModels .chip:not(.chip)').length;
-  const installedBefore = [...doc.querySelectorAll('#localModels .chip')].filter((c) => !c.textContent.startsWith('↓')).length;
-  click(installChip);
-  await wait(3500);
-  check('pull progress finished', /installed/.test($('pullText').textContent), $('pullText').textContent);
-  const installedAfter = [...doc.querySelectorAll('#localModels .chip')].filter((c) => !c.textContent.startsWith('↓')).length;
-  check('installed model added to list', installedAfter === installedBefore + 1, `${installedBefore} -> ${installedAfter}`);
-  check('install chip no longer offered', ![...doc.querySelectorAll('#localModels .chip')].some((c) => c.textContent === installChip.textContent));
-  void before;
-}
-
-// chat with the local model
 click($('closeModal'));
-$('input').value = 'Explain why local models are free';
+$('input').value = 'Explain why keyless endpoints are handy';
 $('input').dispatchEvent(new window.Event('input', { bubbles: true }));
 $('composer').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
 await wait(200);
 check('user bubble rendered', !!q('.msg.user .bubble'));
-check('generation finished (local engine)', await settled());
+check('generation finished (keyless engine)', await settled());
 const md = q('.msg.assistant .md');
-check('local answer streamed as markdown', !!md && md.textContent.length > 80, md?.textContent.slice(0, 60));
+check('answer streamed as markdown', !!md && md.textContent.length > 80, md?.textContent.slice(0, 60));
 check('code block highlighted', !!q('.code-block pre code.hljs span'));
 check('table rendered', !!q('.msg.assistant .md table'));
-check('sidebar says local', /local/.test($('modelBadge').textContent), $('modelBadge').textContent);
+check('sidebar says keyless', /keyless/.test($('modelBadge').textContent), $('modelBadge').textContent);
 check('history kept', doc.querySelectorAll('.chat-item').length === 1);
 
-// ── 3. in-browser engine (WebGPU) ───────────────────────────────────────────
+// ── 3. in-browser engine (WebGPU) ──────────────────────────────────────────
 click($('openSettings'));
 await wait(150);
 click(doc.querySelector('.engine-card[data-engine="browser"]'));
 await wait(200);
-check('browser panel visible', !$('browserPanel').hidden && $('localPanel').hidden);
+check('browser panel visible', !$('browserPanel').hidden && $('apiPanel').hidden);
 check('browser models listed', $('browserModel').options.length >= 6, String($('browserModel').options.length));
 check('no WebGPU in jsdom is reported', /no WebGPU/i.test($('dlText').textContent), $('dlText').textContent);
 click($('closeModal'));
@@ -129,12 +111,14 @@ check('no crash: composer usable again', $('stopBtn').hidden === true);
 click($('newChat'));
 await wait(150);
 
-// ── 4. free-API engine still works ──────────────────────────────────────────
+// ── 4. free-API-key engine ──────────────────────────────────────────
 click($('openSettings'));
 await wait(120);
 click(doc.querySelector('.engine-card[data-engine="api"]'));
 await wait(120);
 check('api panel visible', !$('apiPanel').hidden && $('browserPanel').hidden);
+check('engine cards offer 3 options', doc.querySelectorAll('.engine-card').length === 3);
+check('API key field shown when a key is needed', $('keyField').hidden === false);
 check('providers loaded', $('providerSelect').options.length >= 6, String($('providerSelect').options.length));
 $('baseUrl').value = 'http://localhost:4010/v1';
 $('modelInput').value = 'demo-model';

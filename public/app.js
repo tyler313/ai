@@ -30,20 +30,6 @@ const BROWSER_MODELS = [
   { id: 'Qwen3-1.7B-q4f16_1-MLC', label: 'Qwen3 1.7B', size: '~1.3 GB', vram: 2.0, note: 'Fallback for weak/older GPUs' },
 ];
 
-/* Ollama models worth installing, with the RAM you roughly need. */
-const LOCAL_MODELS = [
-  { id: 'llama3.2:3b', label: 'Llama 3.2 3B', ram: 4, note: 'Fast, fits almost anything' },
-  { id: 'qwen2.5:7b', label: 'Qwen2.5 7B', ram: 8, note: 'Strong general model' },
-  { id: 'deepseek-r1:8b', label: 'DeepSeek-R1 8B', ram: 8, note: 'Reasoning / maths / code' },
-  { id: 'llama3.1:8b', label: 'Llama 3.1 8B', ram: 8, note: 'Reliable all-rounder' },
-  { id: 'qwen2.5-coder:7b', label: 'Qwen2.5 Coder 7B', ram: 8, note: 'Best free code model' },
-  { id: 'gemma3:12b', label: 'Gemma 3 12B', ram: 12, note: 'Noticeably smarter, needs 12 GB', vision: true },
-  { id: 'qwen2.5:14b', label: 'Qwen2.5 14B', ram: 16, note: 'Great when you have 16 GB free' },
-  { id: 'gpt-oss:20b', label: 'gpt-oss 20B', ram: 16, note: 'Open-weight, strong on tools' },
-  { id: 'deepseek-r1:32b', label: 'DeepSeek-R1 32B', ram: 24, note: 'Serious reasoning, 24 GB' },
-  { id: 'llama3.3:70b', label: 'Llama 3.3 70B', ram: 48, note: 'Best free quality; needs a big machine' },
-];
-
 const HLJS_ALIAS = {
   js: 'javascript', jsx: 'javascript', mjs: 'javascript', cjs: 'javascript', node: 'javascript',
   ts: 'typescript', tsx: 'typescript', py: 'python', py3: 'python', rb: 'ruby',
@@ -62,10 +48,10 @@ const state = load() || {
   activeId: null,
   search: '',
   settings: {
-    engine: '', // '' = not chosen yet, 'browser' | 'local' | 'api'
+    engine: '', // '' = not chosen yet, 'keyless' | 'api' | 'browser'
     browserModel: '',
-    localBaseUrl: 'http://localhost:11434/v1',
-    localModel: '',
+    keylessBaseUrl: '',
+    keylessEndpointName: '',
     provider: 'gemini',
     baseUrl: '',
     apiKey: '',
@@ -91,9 +77,10 @@ function load() {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object' || !parsed.settings) return null;
-    parsed.settings = { engine: '', browserModel: '', localModel: '', localBaseUrl: 'http://localhost:11434/v1', models: {}, ...parsed.settings };
+    parsed.settings = { engine: '', browserModel: '', keylessBaseUrl: '', models: {}, ...parsed.settings };
     // anyone who already configured an endpoint is on the "api" engine
     if (!parsed.settings.engine && parsed.settings.baseUrl) parsed.settings.engine = 'api';
+    if (parsed.settings.engine === 'local') parsed.settings.engine = 'api'; // Ollama engine removed
     return parsed;
   } catch {
     return null;
@@ -118,8 +105,8 @@ const activeConv = () => state.conversations[state.activeId] || null;
 /** Everything the chat call needs, resolved from whichever engine is picked. */
 function connection() {
   const s = settings();
-  if (s.engine === 'local') {
-    return { kind: 'local', baseUrl: s.localBaseUrl || 'http://localhost:11434/v1', apiKey: '', model: s.localModel, label: s.localModel || 'no model' };
+  if (s.engine === 'keyless') {
+    return { kind: 'keyless', baseUrl: s.keylessBaseUrl || s.baseUrl, apiKey: '', model: s.model, label: s.model || 'no model' };
   }
   if (s.engine === 'browser') {
     return { kind: 'browser', baseUrl: 'browser', apiKey: '', model: s.browserModel, label: s.browserModel || 'no model' };
@@ -351,7 +338,7 @@ function renderSidebar() {
 
   const badge = $('modelBadge');
   const conn = connection();
-  const where = { browser: 'in browser', local: 'local', api: hostOf(conn.baseUrl) }[conn.kind] || 'not configured';
+  const where = { browser: 'in browser', keyless: 'keyless', api: hostOf(conn.baseUrl) }[conn.kind] || 'not configured';
   badge.textContent = isConfigured() ? `${prettyModel(conn.model)} · ${where}` : 'not configured';
   badge.title = badge.textContent;
 }
@@ -405,7 +392,7 @@ function heroNode() {
         : `<div class="error-box" style="max-width:520px;margin:0 auto 24px;text-align:left">
              <b>No model connected yet.</b><br />MiniChat is a free chat UI — it needs an endpoint to talk to.
              Pick a free provider (Google Gemini, Groq, OpenRouter all have free tiers) or point it at a local
-             Ollama install, which is free forever and needs no key.
+             a free API key (Gemini, Groq, OpenRouter all have free tiers).
              <div class="row"><button class="btn primary" id="heroSetup">Choose how to run it</button></div>
            </div>`
     }
@@ -777,7 +764,7 @@ function streamSink(msg) {
   };
 }
 
-/** Streams from the Node proxy (Ollama / LM Studio / any OpenAI-compatible API). */
+/** Streams from the Node proxy (keyless gateway, free API, or your own endpoint). */
 async function runServerStream(conn, conv, msg, controller) {
   const s = settings();
   const res = await fetch('/api/chat', {
@@ -846,8 +833,8 @@ async function runBrowserEngine(conv, msg, controller) {
   if (!('gpu' in navigator)) {
     throw new Error(
       'This browser has no WebGPU, so the in-browser model cannot run.\n\n' +
-        'Use Chrome or Edge 113+ (or Safari 26+), or switch to "On your machine" (Ollama) in Settings — ' +
-        'that is free too and usually gives better answers.'
+        'Use Chrome or Edge 113+ (or Safari 26+), or switch to "Keyless" / "Free API key" in Settings — ' +
+        'both are free and usually give stronger answers.'
     );
   }
 
@@ -907,6 +894,9 @@ function friendlyError(err) {
   const m = String(err?.message || err);
   if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return "Couldn't reach the server. Is `node server.js` still running?";
   if (/No endpoint configured/i.test(m)) return m;
+  if (settings().engine === 'keyless') {
+    return `${m}\n\nIf this keeps happening, open Settings and press "Find a working endpoint" to switch to another keyless gateway — or add a free Gemini/Groq key, which is more reliable.`;
+  }
   return m;
 }
 
@@ -1058,15 +1048,14 @@ function renderProviderSelect() {
 function updateProviderNote() {
   const p = providers.find((x) => x.id === $('providerSelect').value);
   $('providerNote').innerHTML = p?.note ? `${escapeHtml(p.note)}${p.keyUrl ? ` <a href="${p.keyUrl}" target="_blank" rel="noreferrer">Get a key →</a>` : ''}` : '';
-  $('endpointHint').textContent = p?.id === 'ollama' || p?.id === 'lmstudio' ? 'Runs locally — no API key needed (leave the key blank).' : '';
+  $('endpointHint').textContent = p?.keyless ? 'No key needed — press "Find a working endpoint".' : '';
   $('keyLink').innerHTML = p?.keyUrl ? `<a href="${p.keyUrl}" target="_blank" rel="noreferrer">Get a free key →</a>` : '';
 }
 
 function fillSettingsForm() {
   const s = settings();
   $('browserModel').value = s.browserModel || '';
-  $('localBaseUrl').value = s.localBaseUrl || 'http://localhost:11434/v1';
-  $('baseUrl').value = s.baseUrl || '';
+  $('baseUrl').value = (s.engine === 'keyless' ? s.keylessBaseUrl : s.baseUrl) || '';
   $('apiKey').value = s.apiKey || '';
   $('modelInput').value = s.model || '';
   $('systemPrompt').value = s.systemPrompt || '';
@@ -1133,10 +1122,10 @@ function closeModal() {
 function saveSettingsForm() {
   const s = settings();
   s.browserModel = $('browserModel').value;
-  s.localBaseUrl = ($('localBaseUrl').value || '').trim() || 'http://localhost:11434/v1';
   s.provider = $('providerSelect').value;
   s.baseUrl = $('baseUrl').value.trim();
-  s.apiKey = $('apiKey').value.trim();
+  if (s.engine === 'keyless') s.keylessBaseUrl = s.baseUrl;
+  s.apiKey = s.engine === 'keyless' ? '' : $('apiKey').value.trim();
   s.model = $('modelInput').value.trim();
   s.systemPrompt = $('systemPrompt').value;
   s.temperature = Number($('temperature').value);
@@ -1159,7 +1148,7 @@ async function testConnection() {
     const model = BROWSER_MODELS.find((m) => m.id === s.browserModel);
     if (!gpu) {
       out.className = 'test-result bad';
-      out.textContent = 'No WebGPU in this browser. Use Chrome/Edge 113+, or switch to "On your machine" (Ollama).';
+      out.textContent = 'No WebGPU in this browser. Use Chrome/Edge 113+, or switch to the keyless / free-key engine.';
       return;
     }
     out.className = 'test-result ok';
@@ -1169,11 +1158,11 @@ async function testConnection() {
     return;
   }
 
-  if (s.engine === 'local') {
+  if (s.engine === 'keyless') {
     try {
-      const models = await detectLocal();
+      const data = await discoverKeyless();
       out.className = 'test-result ok';
-      out.textContent = models.length ? `Connected — ${models.length} model(s) installed.` : 'Connected, but no models installed yet.';
+      out.textContent = `${data.name} is up — ${data.models.length} models, using ${settings().model}.`;
     } catch (err) {
       out.className = 'test-result bad';
       out.textContent = err.message;
@@ -1243,17 +1232,17 @@ function importAll(file) {
 // ──────────────────────── engines: browser / local ────────────────────────
 
 const ENGINE_NOTE = {
-  browser:
-    'Runs inside this browser tab — nothing to install, no account, prompts never leave your machine. The first reply waits on a one-time model download, then it is cached.',
-  local:
-    'Ollama runs open models on your own machine: free forever, works offline, no account, no key. Bigger model = better answers, but more RAM needed.',
+  keyless:
+    'No account, no key. Community endpoints serve strong open models (DeepSeek V4 Pro, GLM-5.2, MiniMax-M3, Gemma 4). They rotate models and rate-limit, so if one stops working, press "Find a working endpoint".',
   api:
-    'A free provider account (Gemini, Groq, OpenRouter). The strongest models you can get for free, but prompts are sent to them and free tiers are rate limited.',
+    'A free provider account (Gemini, Groq, OpenRouter) — the strongest models you can get for free, prompts are sent to them. Or paste any OpenAI-compatible endpoint of your own.',
+  browser:
+    'Runs inside this browser tab — nothing to install, prompts never leave your machine. The first reply waits on a one-time model download, then it is cached. Models are smaller (up to 8B), so answers are a step below the hosted options.',
 };
 
 function prettyModel(id) {
   if (!id) return '';
-  return BROWSER_MODELS.find((m) => m.id === id)?.label || LOCAL_MODELS.find((m) => m.id === id)?.label || id;
+  return BROWSER_MODELS.find((m) => m.id === id)?.label || id;
 }
 
 /** Rough guess at what this device can actually run, for recommendations. */
@@ -1278,15 +1267,15 @@ function applyEngineUI() {
   const e = settings().engine;
   document.querySelectorAll('.engine-card').forEach((c) => c.classList.toggle('active', c.dataset.engine === e));
   $('browserPanel').hidden = e !== 'browser';
-  $('localPanel').hidden = e !== 'local';
-  $('apiPanel').hidden = e !== 'api';
-  $('engineNote').textContent = ENGINE_NOTE[e] || 'Pick where the model should run — you can change this later.';
+  $('apiPanel').hidden = e === 'browser';
+  $('engineNote').textContent = ENGINE_NOTE[e] || 'Pick how the model should run — you can change this later.';
   updateHwNote();
   if (e === 'browser') renderBrowserModels();
-  if (e === 'local') {
-    renderLocalChips(localInstalled);
-    if (!localInstalled.length) $('localHint').textContent = 'Press Detect to look for Ollama on this machine.';
+  if (e === 'keyless' && $('providerSelect').querySelector('option[value="keyless"]')) {
+    $('providerSelect').value = 'keyless';
+    updateProviderNote();
   }
+  updateKeylessUI();
 }
 
 function renderBrowserModels() {
@@ -1305,161 +1294,61 @@ function renderBrowserModels() {
     sel.appendChild(o);
   }
   if (cur) sel.value = cur;
-  else if (!gpu) $('dlText').textContent = 'This browser has no WebGPU — try Chrome/Edge 113+, or use Ollama instead.';
+  else if (!gpu) $('dlText').textContent = 'This browser has no WebGPU — try Chrome/Edge 113+, or use the keyless engine instead.';
   else $('dlText').textContent = 'Nothing to install. The model downloads once, then runs locally on your GPU.';
 }
 
-let localInstalled = [];
-
-function renderLocalChips(installed) {
-  const wrap = $('localModels');
-  wrap.innerHTML = '';
-  const s = settings();
-
-  for (const m of installed) {
-    const chip = document.createElement('button');
-    chip.className = 'chip' + (s.localModel === m.id ? ' active' : '');
-    if (m.running) {
-      const dot = document.createElement('span');
-      dot.className = 'dot';
-      chip.appendChild(dot);
-    }
-    const name = document.createElement('span');
-    name.textContent = m.id;
-    chip.appendChild(name);
-    if (m.sizeText) {
-      const size = document.createElement('small');
-      size.textContent = m.sizeText;
-      chip.appendChild(size);
-    }
-    chip.title = [m.params, m.quant, m.family].filter(Boolean).join(' · ') || m.id;
-    chip.addEventListener('click', () => {
-      s.localModel = m.id;
-      save();
-      renderLocalChips(installed);
-      renderModelSelect();
-      renderSidebar();
-    });
-    wrap.appendChild(chip);
-  }
-
-  const missing = LOCAL_MODELS.filter((r) => !installed.some((m) => m.id === r.id || m.id.startsWith(r.id.split(':')[0])));
-  for (const m of missing) {
-    const chip = document.createElement('button');
-    chip.className = 'chip';
-    const name = document.createElement('span');
-    name.textContent = `↓ ${m.label}`;
-    const size = document.createElement('small');
-    size.textContent = `${m.ram} GB RAM`;
-    chip.append(name, size);
-    chip.title = `${m.note} — needs about ${m.ram} GB RAM`;
-    chip.addEventListener('click', () => installLocal(m.id));
-    wrap.appendChild(chip);
+/** Keyless endpoints: hide the key field, offer discovery. */
+function updateKeylessUI() {
+  const keyless = settings().engine === 'keyless';
+  $('findEndpoint').hidden = !keyless;
+  $('keyField').hidden = keyless;
+  if (keyless && !settings().keylessBaseUrl) {
+    $('endpointHint').textContent = 'Press "Find a working endpoint" — we probe a few keyless gateways and use the first that answers.';
+  } else if (keyless) {
+    $('endpointHint').textContent = `Connected to ${settings().keylessEndpointName || settings().keylessBaseUrl}. Models rotate; press Find again if it stops working.`;
   }
 }
 
-async function detectLocal({ quiet = false } = {}) {
-  const s = settings();
-  const base = ($('localBaseUrl').value || s.localBaseUrl || '').trim();
-  s.localBaseUrl = base;
-  if (!quiet) $('localHint').textContent = 'Looking for a local model server…';
+/** Probes keyless endpoints server-side and picks the best model it finds. */
+async function discoverKeyless({ quiet = false } = {}) {
+  const btn = $('findEndpoint');
+  const out = $('endpointHint');
+  btn.disabled = true;
+  const was = btn.textContent;
+  btn.textContent = 'Searching…';
+  if (!quiet) out.textContent = 'Looking for an endpoint that works without a key…';
   try {
-    const res = await fetch('/api/local', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ baseUrl: base }),
-    });
+    const res = await fetch('/api/public/discover');
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-    localInstalled = data.models || [];
-    renderLocalChips(localInstalled);
-    if (!quiet) {
-      $('localHint').textContent = localInstalled.length
-        ? `${data.kind === 'ollama' ? 'Ollama' : 'Local server'} found — ${localInstalled.length} model(s) installed.`
-        : 'Connected, but no models installed yet. Use one of the ↓ buttons to install one.';
-    }
-    if (!s.localModel && localInstalled.length) {
-      s.localModel = localInstalled[0].id;
-      save();
-      renderLocalChips(localInstalled);
-      renderModelSelect();
-      renderSidebar();
-    }
-    return localInstalled;
-  } catch (err) {
-    localInstalled = [];
-    renderLocalChips([]);
-    if (!quiet) {
-      $('localHint').innerHTML =
-        `No local server at <code>${escapeHtml(base || '—')}</code>. ` +
-        (base.includes('11434')
-          ? 'Install Ollama from ollama.com/download, run <code>ollama serve</code>, then press Detect again.'
-          : 'Check the address and that the server is running.');
-    }
-    throw err;
-  }
-}
-
-async function installLocal(model) {
-  const bar = $('pullBar');
-  const wrap = $('pullProgress');
-  const text = $('pullText');
-  wrap.hidden = false;
-  bar.style.width = '2%';
-  text.textContent = `Downloading ${model}…`;
-  try {
-    const res = await fetch('/api/local/pull', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ baseUrl: settings().localBaseUrl, model }),
-    });
-    if (!res.ok || !res.body) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || `HTTP ${res.status}`);
-    }
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = '';
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      let idx;
-      while ((idx = buf.indexOf('\n\n')) !== -1) {
-        const raw = buf.slice(0, idx);
-        buf = buf.slice(idx + 2);
-        let event = 'message';
-        let data = '';
-        for (const line of raw.split('\n')) {
-          if (line.startsWith('event:')) event = line.slice(6).trim();
-          else if (line.startsWith('data:')) data += line.slice(5).trim();
-        }
-        if (!data) continue;
-        try {
-          const parsed = JSON.parse(data);
-          if (event === 'progress') {
-            if (parsed.percent) bar.style.width = parsed.percent + '%';
-            if (parsed.status) text.textContent = `${model} — ${parsed.status}${parsed.percent ? ` ${parsed.percent}%` : ''}`;
-          } else if (event === 'error') {
-            throw new Error(parsed.message || 'Download failed');
-          }
-        } catch (err) {
-          if (err.message && !/JSON/.test(err.message)) throw err;
-        }
-      }
-    }
-    bar.style.width = '100%';
-    text.textContent = `${model} installed.`;
-    await detectLocal({ quiet: true });
-    settings().localModel = model;
+    const s = settings();
+    s.engine = 'keyless';
+    s.provider = 'keyless';
+    s.keylessBaseUrl = data.endpoint;
+    s.keylessEndpointName = data.name || data.endpoint;
+    s.baseUrl = data.endpoint;
+    s.apiKey = '';
+    s.models[data.endpoint] = data.models.map((m) => m.id);
+    if (!s.model || !data.models.some((m) => m.id === s.model)) s.model = data.best || data.models[0].id;
     save();
-    renderLocalChips(localInstalled);
-    renderModelSelect();
+    $('baseUrl').value = s.baseUrl;
+    $('modelInput').value = s.model;
+    if ($('providerSelect').querySelector('option[value="keyless"]')) $('providerSelect').value = 'keyless';
+    updateProviderNote();
+    renderModelList();
+    renderModelSelect(data.models.map((m) => m.id));
     renderSidebar();
-    toast(`${model} is ready`);
+    applyEngineUI();
+    out.textContent = `Connected to ${s.keylessEndpointName} — ${data.models.length} models, using ${s.model}.`;
+    return data;
   } catch (err) {
-    text.textContent = err.message;
-    wrap.hidden = true;
+    out.textContent = err.message;
+    if (!quiet) toast('No keyless endpoint answered');
+    throw err;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = was;
   }
 }
 
@@ -1532,7 +1421,7 @@ function bind() {
       save();
       closeWizard();
       openModal();
-      if (card.dataset.engine === 'local') setTimeout(() => detectLocal().catch(() => {}), 50);
+      if (card.dataset.engine === 'keyless') setTimeout(() => discoverKeyless().catch(() => {}), 50);
       if (card.dataset.engine === 'browser' && !settings().browserModel) {
         const { ram } = deviceProfile();
         const fit = BROWSER_MODELS.find((m) => (ram ? m.vram + 2 <= ram : true)) || BROWSER_MODELS[0];
@@ -1551,7 +1440,7 @@ function bind() {
       settings().engine = card.dataset.engine;
       save();
       applyEngineUI();
-      if (card.dataset.engine === 'local') detectLocal().catch(() => {});
+      if (card.dataset.engine === 'keyless') discoverKeyless().catch(() => {});
       if (card.dataset.engine === 'browser' && !settings().browserModel) {
         const { ram } = deviceProfile();
         const fit = BROWSER_MODELS.find((m) => (ram ? m.vram + 2 <= ram : true)) || BROWSER_MODELS[0];
@@ -1567,11 +1456,7 @@ function bind() {
     renderModelSelect();
     renderSidebar();
   });
-  $('localBaseUrl').addEventListener('change', (e) => {
-    settings().localBaseUrl = e.target.value.trim();
-    save();
-  });
-  $('detectLocal').addEventListener('click', () => detectLocal().catch(() => {}));
+  $('findEndpoint').addEventListener('click', () => discoverKeyless().catch(() => {}));
   document.querySelectorAll('[data-copy]').forEach((btn) =>
     btn.addEventListener('click', async () => {
       try {
@@ -1595,9 +1480,18 @@ function bind() {
   $('providerSelect').addEventListener('change', (e) => {
     const p = providers.find((x) => x.id === e.target.value);
     if (p) {
+      if (p.keyless) {
+        settings().engine = 'keyless';
+        settings().provider = p.id;
+        applyEngineUI();
+        discoverKeyless().catch(() => {});
+        return;
+      }
       if (p.baseUrl) $('baseUrl').value = p.baseUrl;
       if (p.model && !$('modelInput').value) $('modelInput').value = p.model;
       settings().provider = p.id;
+      settings().engine = 'api';
+      applyEngineUI();
     }
     updateProviderNote();
   });
