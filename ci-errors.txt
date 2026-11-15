@@ -1,191 +1,26 @@
 # CI compile output
 
-22:/home/runner/work/ai/ai/src/main/java/com/aicompanion/player/FakePlayerManager.java:77: error: cannot find symbol
-23-            ClientConnection dummyConnection = new ClientConnection(NetworkSide.SERVER);
-24-                                                                               ^
-25-  symbol:   variable SERVER
+22:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:95: error: cannot find symbol
+23-                                            ? ai.brain.perception.owner.getBlockPos() : ai.memory.home;
+24-                                                                                          ^
+25-  symbol:   variable memory
 --
-27:/home/runner/work/ai/ai/src/main/java/com/aicompanion/ai/Perception.java:49: error: cannot find symbol
-28-            Blocks.REDSTONE_ORE, Blocks.LAPIS_LAZULI_ORE, Blocks.EMERALD_ORE,
-29-                                       ^
-30-  symbol:   variable LAPIS_LAZULI_ORE
+27:/home/runner/work/ai/ai/src/main/java/com/aicompanion/util/InventoryUtil.java:90: error: cannot find symbol
+28-        if (item == Items.RAW_BEEF || item == Items.RAW_PORKCHOP || item == Items.RAW_CHICKEN || item == Items.RAW_MUTTON) return 2;
+29-                         ^
+30-  symbol:   variable RAW_BEEF
 --
-32:/home/runner/work/ai/ai/src/main/java/com/aicompanion/ai/Perception.java:51: error: cannot find symbol
-33-            Blocks.DEEPSLATE_COAL_ORE, Blocks.DEEPSLATE_REDSTONE_ORE, Blocks.DEEPSLATE_LAPIS_LAZULI_ORE,
-34-                                                                            ^
-35-  symbol:   variable DEEPSLATE_LAPIS_LAZULI_ORE
+32:/home/runner/work/ai/ai/src/main/java/com/aicompanion/util/InventoryUtil.java:90: error: cannot find symbol
+33-        if (item == Items.RAW_BEEF || item == Items.RAW_PORKCHOP || item == Items.RAW_CHICKEN || item == Items.RAW_MUTTON) return 2;
+34-                                                   ^
+35-  symbol:   variable RAW_PORKCHOP
 --
-37:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:43: error: cannot find symbol
-38-                net.minecraft.command.CommandManager.literal("ai")
-39-                                     ^
-40-  symbol:   class CommandManager
+37:/home/runner/work/ai/ai/src/main/java/com/aicompanion/util/InventoryUtil.java:90: error: cannot find symbol
+38-        if (item == Items.RAW_BEEF || item == Items.RAW_PORKCHOP || item == Items.RAW_CHICKEN || item == Items.RAW_MUTTON) return 2;
+39-                                                                                 ^
+40-  symbol:   variable RAW_CHICKEN
 --
-42:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:44: error: cannot find symbol
-43-                        .then(net.minecraft.command.CommandManager.literal("summon")
-44-                                                   ^
-45-  symbol:   class CommandManager
---
-47:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:46: error: cannot find symbol
-48-                                .then(net.minecraft.command.CommandManager.argument("name", StringArgumentType.word())
-49-                                                           ^
-50-  symbol:   class CommandManager
---
-52:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:48: error: cannot find symbol
-53-                        .then(net.minecraft.command.CommandManager.literal("dismiss")
-54-                                                   ^
-55-  symbol:   class CommandManager
---
-57:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:50: error: cannot find symbol
-58-                        .then(net.minecraft.command.CommandManager.literal("follow")
-59-                                                   ^
-60-  symbol:   class CommandManager
---
-62:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:52: error: cannot find symbol
-63-                        .then(net.minecraft.command.CommandManager.literal("stay")
-64-                                                   ^
-65-  symbol:   class CommandManager
---
-67:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:57: error: cannot find symbol
-68-                        .then(net.minecraft.command.CommandManager.literal("mine")
-69-                                                   ^
-70-  symbol:   class CommandManager
---
-72:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:58: error: cannot find symbol
-73-                                .then(net.minecraft.command.CommandManager.argument("block", StringArgumentType.word())
-74-                                                           ^
-75-  symbol:   class CommandManager
---
-77:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:60: error: cannot find symbol
-78-                                        .then(net.minecraft.command.CommandManager.argument("count", IntegerArgumentType.integer(1, 256))
-79-                                                                   ^
-80-  symbol:   class CommandManager
---
-82:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:64: error: cannot find symbol
-83-                        .then(net.minecraft.command.CommandManager.literal("chop")
-84-                                                   ^
-85-  symbol:   class CommandManager
---
-87:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:66: error: cannot find symbol
-88-                                .then(net.minecraft.command.CommandManager.argument("count", IntegerArgumentType.integer(1, 256))
-89-                                                           ^
-90-  symbol:   class CommandManager
---
-92:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:68: error: cannot find symbol
-93-                        .then(net.minecraft.command.CommandManager.literal("build")
-94-                                                   ^
-95-  symbol:   class CommandManager
---
-97:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:69: error: cannot find symbol
-98-                                .then(net.minecraft.command.CommandManager.argument("structure", StringArgumentType.word())
-99-                                                           ^
-100-  symbol:   class CommandManager
---
-102:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:71: error: cannot find symbol
-103-                        .then(net.minecraft.command.CommandManager.literal("attack")
-104-                                                   ^
-105-  symbol:   class CommandManager
---
-107:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:73: error: cannot find symbol
-108-                        .then(net.minecraft.command.CommandManager.literal("hunt")
-109-                                                   ^
-110-  symbol:   class CommandManager
---
-112:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:75: error: cannot find symbol
-113-                        .then(net.minecraft.command.CommandManager.literal("farm")
-114-                                                   ^
-115-  symbol:   class CommandManager
---
-117:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:77: error: cannot find symbol
-118-                                .then(net.minecraft.command.CommandManager.argument("crop", StringArgumentType.word())
-119-                                                           ^
-120-  symbol:   class CommandManager
---
-122:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:79: error: cannot find symbol
-123-                                        .then(net.minecraft.command.CommandManager.argument("count", IntegerArgumentType.integer(1, 256))
-124-                                                                   ^
-125-  symbol:   class CommandManager
---
-127:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:83: error: cannot find symbol
-128-                        .then(net.minecraft.command.CommandManager.literal("craft")
-129-                                                   ^
-130-  symbol:   class CommandManager
---
-132:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:84: error: cannot find symbol
-133-                                .then(net.minecraft.command.CommandManager.argument("item", StringArgumentType.word())
-134-                                                           ^
-135-  symbol:   class CommandManager
---
-137:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:86: error: cannot find symbol
-138-                                        .then(net.minecraft.command.CommandManager.argument("count", IntegerArgumentType.integer(1, 256))
-139-                                                                   ^
-140-  symbol:   class CommandManager
---
-142:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:90: error: cannot find symbol
-143-                        .then(net.minecraft.command.CommandManager.literal("explore")
-144-                                                   ^
-145-  symbol:   class CommandManager
---
-147:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:92: error: cannot find symbol
-148-                        .then(net.minecraft.command.CommandManager.literal("guard")
-149-                                                   ^
-150-  symbol:   class CommandManager
---
-152:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:99: error: cannot find symbol
-153-                        .then(net.minecraft.command.CommandManager.literal("home")
-154-                                                   ^
-155-  symbol:   class CommandManager
---
-157:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:101: error: cannot find symbol
-158-                        .then(net.minecraft.command.CommandManager.literal("eat")
-159-                                                   ^
-160-  symbol:   class CommandManager
---
-162:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:103: error: cannot find symbol
-163-                        .then(net.minecraft.command.CommandManager.literal("sleep")
-164-                                                   ^
-165-  symbol:   class CommandManager
---
-167:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:105: error: cannot find symbol
-168-                        .then(net.minecraft.command.CommandManager.literal("say")
-169-                                                   ^
-170-  symbol:   class CommandManager
---
-172:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:106: error: cannot find symbol
-173-                                .then(net.minecraft.command.CommandManager.argument("message", StringArgumentType.greedyString())
-174-                                                           ^
-175-  symbol:   class CommandManager
---
-177:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:108: error: cannot find symbol
-178-                        .then(net.minecraft.command.CommandManager.literal("status")
-179-                                                   ^
-180-  symbol:   class CommandManager
---
-182:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:110: error: cannot find symbol
-183-                        .then(net.minecraft.command.CommandManager.literal("help")
-184-                                                   ^
-185-  symbol:   class CommandManager
---
-187:/home/runner/work/ai/ai/src/main/java/com/aicompanion/util/InventoryUtil.java:90: error: cannot find symbol
-188-        if (item == Items.RAW_BEEF || item == Items.RAW_PORKCHOP || item == Items.RAW_CHICKEN || item == Items.RAW_MUTTON) return 2;
-189-                         ^
-190-  symbol:   variable RAW_BEEF
---
-192:/home/runner/work/ai/ai/src/main/java/com/aicompanion/util/InventoryUtil.java:90: error: cannot find symbol
-193-        if (item == Items.RAW_BEEF || item == Items.RAW_PORKCHOP || item == Items.RAW_CHICKEN || item == Items.RAW_MUTTON) return 2;
-194-                                                   ^
-195-  symbol:   variable RAW_PORKCHOP
---
-197:/home/runner/work/ai/ai/src/main/java/com/aicompanion/util/InventoryUtil.java:90: error: cannot find symbol
-198-        if (item == Items.RAW_BEEF || item == Items.RAW_PORKCHOP || item == Items.RAW_CHICKEN || item == Items.RAW_MUTTON) return 2;
-199-                                                                                 ^
-200-  symbol:   variable RAW_CHICKEN
---
-202:/home/runner/work/ai/ai/src/main/java/com/aicompanion/util/InventoryUtil.java:90: error: cannot find symbol
-203-        if (item == Items.RAW_BEEF || item == Items.RAW_PORKCHOP || item == Items.RAW_CHICKEN || item == Items.RAW_MUTTON) return 2;
-204-                                                                                                              ^
-205-  symbol:   variable RAW_MUTTON
---
-207:/home/runner/work/ai/ai/src/main/java/com/aicompanion/util/BlockUtil.java:31: error: cannot find symbol
-208-            case "lapis", "lapis_lazuli" -> Blocks.LAPIS_LAZULI_ORE;
-209-                                                  ^
-210-  symbol:   variable LAPIS_LAZULI_ORE
+42:/home/runner/work/ai/ai/src/main/java/com/aicompanion/util/InventoryUtil.java:90: error: cannot find symbol
+43-        if (item == Items.RAW_BEEF || item == Items.RAW_PORKCHOP || item == Items.RAW_CHICKEN || item == Items.RAW_MUTTON) return 2;
+44-                                                                                                              ^
+45-  symbol:   variable RAW_MUTTON
