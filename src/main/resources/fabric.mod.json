@@ -1,0 +1,27 @@
+{
+	"schemaVersion": 1,
+	"id": "aimobs",
+	"version": "${version}",
+	"name": "AI Mobs",
+	"description": "Spawn AI companions in your world, give them API keys (Claude, ChatGPT, Gemini) or use the free built-in brain, and boss them around in chat. Right Shift opens the menu.",
+	"authors": [
+		"you"
+	],
+	"license": "MIT",
+	"icon": "assets/aimobs/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.aimobs.AiMobs"
+		],
+		"client": [
+			"com.aimobs.AiMobsClient"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.15.0",
+		"minecraft": "~1.20.1",
+		"java": ">=17",
+		"fabric-api": "*"
+	}
+}
