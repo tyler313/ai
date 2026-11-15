@@ -1,8 +1,13 @@
 # AI Mobs
 
-Fabric mod for **Minecraft 1.20.1**. Spawn AI companions into your world, plug in your
-own API keys (Claude / ChatGPT / Gemini) — or use the **free AI that needs no key at
-all** — and boss them around by typing in chat.
+Fabric mod for **Minecraft 1.20.1**, built against **Fabric Loader 0.20.1**.
+Spawn AI companions into your world, plug in your own API keys (Claude / ChatGPT /
+Gemini) — or use the **free AI that needs no key at all** — and boss them around by
+typing in chat.
+
+> **Status:** this repo builds green in CI (`./gradlew build`) *and* boots a real
+> dedicated Minecraft 1.20.1 server with the mod loaded. The jar is attached to every
+> successful Actions run as the `aimobs-jar` artifact.
 
 Press **RIGHT SHIFT** in game to open the menu.
 
@@ -106,7 +111,8 @@ do anything that is not one of the commands above.
 
 ## Installing
 
-1. Install **Fabric Loader** for **Minecraft 1.20.1** (fabricmc.net/use).
+1. Install **Fabric Loader** (0.20.1 or newer) for **Minecraft 1.20.1**
+   (fabricmc.net/use).
 2. Put **Fabric API** for 1.20.1 in your `mods` folder.
 3. Put `aimobs-1.0.0.jar` in your `mods` folder.
 4. Launch the 1.20.1 Fabric profile.
@@ -125,10 +131,12 @@ Requires **JDK 17**:
 
 The jar lands in `build/libs/aimobs-1.0.0.jar` (ignore the `-sources` one).
 
-There is also a GitHub Actions workflow (`.github/workflows/build.yml`): push this
-repo to GitHub and the **Actions** tab will compile the jar for you — download it from
-the run's *Artifacts* section. That is the easiest route if you do not have a JDK
-installed.
+There is also a GitHub Actions workflow (`.github/workflows/build.yml`) that runs on
+every push/PR: it compiles the mod, uploads the jar as the **aimobs-jar** artifact, and
+then boots a dedicated server with the mod installed to make sure it actually loads.
+
+If you do not have a JDK installed, that is the easiest route: open the **Actions** tab,
+click the latest green run, and download `aimobs-jar` from the *Artifacts* section.
 
 To test in a dev world: `./gradlew runClient`.
 
