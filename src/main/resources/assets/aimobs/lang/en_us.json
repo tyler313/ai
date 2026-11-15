@@ -1,0 +1,14 @@
+{
+	"key.categories.aimobs": "AI Mobs",
+	"key.aimobs.menu": "Open AI Menu",
+
+	"entity.aimobs.ai_mob": "AI Mob",
+
+	"aimobs.title": "AI Command Center",
+	"aimobs.spawn": "SPAWN",
+	"aimobs.follow": "Follow me",
+	"aimobs.stay": "Stay",
+	"aimobs.come": "Come",
+	"aimobs.dismiss": "Dismiss",
+	"aimobs.your_ais": "Your AIs"
+}

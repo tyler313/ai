@@ -1,0 +1,93 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build
+        id: build
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          ./gradlew build --stacktrace --no-daemon 2>&1 | tee build.log
+
+      - name: Report failure
+        if: steps.build.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set +e
+          grep -E "error:|^e: |FAILURE:|What went wrong|Caused by" build.log | head -8 | while IFS= read -r line; do
+            echo "::error::$line"
+          done
+
+          {
+            echo "### Build failed"
+            echo ""
+            echo '```'
+            grep -A4 -E "error: |^e: " build.log | grep -vE "^\s+at " | head -150
+            echo '```'
+          } > report.md
+
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr comment "$PR_NUMBER" --body-file report.md || true
+          fi
+          tail -c 8000 build.log
+          exit 1
+
+      - name: Upload jar
+        if: steps.build.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: aimobs-jar
+          path: build/libs/*.jar
+          if-no-files-found: error
+
+  smoke:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Boot a dedicated server with the mod loaded
+        run: |
+          mkdir -p run
+          echo "eula=true" > run/eula.txt
+          printf 'level-type=flat\nonline-mode=false\nmax-tick-time=-1\nspawn-protection=0\n' > run/server.properties
+          timeout 420 ./gradlew runServer --args="--nogui" > server.log 2>&1 || true
+          echo "----- last 70 lines of the server log -----"
+          tail -70 server.log
+          grep -q "AI Mobs loaded" server.log || { echo "::error::AI Mobs never logged its startup line"; exit 1; }
+          grep -qE "Done \(" server.log || { echo "::error::Server never finished starting"; exit 1; }
+          echo "OK: dedicated server started with AI Mobs loaded."
