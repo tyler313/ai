@@ -1,9 +1,60 @@
 # CI compile output
 
-22:/home/runner/work/ai/ai/src/main/java/com/aicompanion/ai/tasks/BuildTask.java:6: error: package com.aicompanion.build does not exist
-25:/home/runner/work/ai/ai/src/main/java/com/aicompanion/ai/tasks/BuildTask.java:7: error: package com.aicompanion.build does not exist
-28:/home/runner/work/ai/ai/src/main/java/com/aicompanion/ai/tasks/BuildTask.java:25: error: cannot find symbol
-33:/home/runner/work/ai/ai/src/main/java/com/aicompanion/chat/NLPParser.java:5: error: package com.aicompanion.build does not exist
-38:FAILURE: Build failed with an exception.
-40:* What went wrong:
-233:BUILD FAILED in 1m
+22:/home/runner/work/ai/ai/src/main/java/com/aicompanion/AIMod.java:35: error: incompatible types: CommandDispatcher<ServerCommandSource> cannot be converted to CommandDispatcher<CommandSource>
+25:/home/runner/work/ai/ai/src/main/java/com/aicompanion/player/FakePlayerManager.java:77: error: cannot find symbol
+30:/home/runner/work/ai/ai/src/main/java/com/aicompanion/player/FakePlayerManager.java:236: error: method sendToAll in class PlayerManager cannot be applied to given types;
+36:/home/runner/work/ai/ai/src/main/java/com/aicompanion/ai/Perception.java:49: error: cannot find symbol
+41:/home/runner/work/ai/ai/src/main/java/com/aicompanion/ai/Perception.java:51: error: cannot find symbol
+46:/home/runner/work/ai/ai/src/main/java/com/aicompanion/ai/tasks/SleepTask.java:36: error: cannot find symbol
+51:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:43: error: cannot find symbol
+56:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:44: error: cannot find symbol
+61:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:46: error: cannot find symbol
+66:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:48: error: cannot find symbol
+71:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:50: error: cannot find symbol
+76:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:52: error: cannot find symbol
+81:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:57: error: cannot find symbol
+86:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:58: error: cannot find symbol
+91:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:60: error: cannot find symbol
+96:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:64: error: cannot find symbol
+101:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:66: error: cannot find symbol
+106:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:68: error: cannot find symbol
+111:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:69: error: cannot find symbol
+116:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:71: error: cannot find symbol
+121:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:73: error: cannot find symbol
+126:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:75: error: cannot find symbol
+131:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:77: error: cannot find symbol
+136:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:79: error: cannot find symbol
+141:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:83: error: cannot find symbol
+146:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:84: error: cannot find symbol
+151:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:86: error: cannot find symbol
+156:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:90: error: cannot find symbol
+161:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:92: error: cannot find symbol
+166:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:99: error: cannot find symbol
+171:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:101: error: cannot find symbol
+176:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:103: error: cannot find symbol
+181:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:105: error: cannot find symbol
+186:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:106: error: cannot find symbol
+191:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:108: error: cannot find symbol
+196:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:110: error: cannot find symbol
+201:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:121: error: cannot find symbol
+206:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:123: error: cannot find symbol
+211:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:126: error: cannot find symbol
+216:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:135: error: cannot find symbol
+221:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:138: error: cannot find symbol
+226:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:151: error: cannot find symbol
+231:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:157: error: cannot find symbol
+236:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:227: error: cannot find symbol
+241:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:245: error: cannot find symbol
+246:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:266: error: cannot find symbol
+251:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:272: error: cannot find symbol
+256:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:274: error: cannot find symbol
+261:/home/runner/work/ai/ai/src/main/java/com/aicompanion/command/AICommand.java:280: error: cannot find symbol
+266:/home/runner/work/ai/ai/src/main/java/com/aicompanion/util/InventoryUtil.java:90: error: cannot find symbol
+271:/home/runner/work/ai/ai/src/main/java/com/aicompanion/util/InventoryUtil.java:90: error: cannot find symbol
+276:/home/runner/work/ai/ai/src/main/java/com/aicompanion/util/InventoryUtil.java:90: error: cannot find symbol
+281:/home/runner/work/ai/ai/src/main/java/com/aicompanion/util/InventoryUtil.java:90: error: cannot find symbol
+286:/home/runner/work/ai/ai/src/main/java/com/aicompanion/util/BlockUtil.java:31: error: cannot find symbol
+291:/home/runner/work/ai/ai/src/main/java/com/aicompanion/util/ChatUtil.java:22: error: method sendToAll in class PlayerManager cannot be applied to given types;
+302:FAILURE: Build failed with an exception.
+304:* What went wrong:
+497:BUILD FAILED in 1m 1s
