@@ -46,7 +46,7 @@ public class AIConfig {
 
     // --- Chat ---
     public boolean aiChatEnabled = true;
-    public String chatPrefix = "[Aria]";
+    public String chatPrefix = ""; // blank = auto "[<AI name>]"
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("aicompanion.json");

@@ -141,12 +141,26 @@ public class LLMPlanner {
         }
     }
 
-    /** Generate a chatty reply via LLM (for /ai say). */
+    /** Generate a chatty reply via LLM (for /ai say). Blocking — prefer {@link #chatReplyAsync}. */
     public String chatReply(String playerMessage) {
         if (!isAvailable()) return null;
-        String system = "You are Aria, a friendly Minecraft AI companion. Reply briefly (1-2 sentences), in character. "
+        return client.chat(chatSystemPrompt(), playerMessage);
+    }
+
+    /**
+     * Async personality reply — safe to call from the server thread.
+     * Returns a future that completes with the reply, or with {@code null} on
+     * failure / when no LLM is configured.
+     */
+    public CompletableFuture<String> chatReplyAsync(String playerMessage) {
+        if (!isAvailable()) return CompletableFuture.completedFuture(null);
+        return client.chatAsync(chatSystemPrompt(), playerMessage);
+    }
+
+    private String chatSystemPrompt() {
+        return "You are " + AIMod.CONFIG.aiName + ", a friendly Minecraft AI companion. "
+                + "Reply briefly (1-2 sentences), in character, never with markdown. "
                 + "You follow the player, mine, build, fight, and farm with them. "
                 + "World: " + brain.perception.summary();
-        return client.chat(system, playerMessage);
     }
 }

@@ -10,20 +10,17 @@ base {
     archivesName = project.archives_base_name
 }
 
-java {
-    toolchain.languageVersion = JavaLanguageVersion.of(21)
-    withSourcesJar()
+repositories {
+    mavenCentral()
 }
 
 loom {
-    splitEnvironmentSourceSets()
+    accessWidenerPath = file("src/main/resources/aicompanion.accesswidener")
+}
 
-    mods {
-        'aicompanion' {
-            sourceSet sourceSets.main
-            sourceSet sourceSets.client
-        }
-    }
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(21)
+    withSourcesJar()
 }
 
 dependencies {
@@ -31,7 +28,7 @@ dependencies {
     mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
 
-    // Fabric API
+    // Fabric API — required for command registration, tick/message events.
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 }
 
@@ -50,6 +47,11 @@ processResources {
 tasks.withType(JavaCompile).configureEach {
     it.options.release = 21
     it.options.encoding = "UTF-8"
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
 }
 
 jar {

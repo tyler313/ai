@@ -13,7 +13,7 @@ Powered by **utility AI + A\* pathfinding**, with an **optional LLM brain** (Ope
 | Skill | Description |
 |---|---|
 | **Follow** | Follows you everywhere, jumps, swims, teleports if you get too far |
-| **Mine** | Finds ores/blocks, paths to them, mines with the best tool, avoids lava pockets |
+| **Mine** | Finds ores/blocks, paths to them, mines (vanilla break timing) with the best tool, avoids lava pockets |
 | **Chop** | Chops trees for logs, replants saplings |
 | **Build** | Builds houses, towers, bridges, walls, farms, shelters, stairs, platforms |
 | **Combat** | Fights zombies/skeletons/etc. with sword or bow, strafes, retreats when hurt |
@@ -29,7 +29,8 @@ Powered by **utility AI + A\* pathfinding**, with an **optional LLM brain** (Ope
 ### How smart is it?
 
 - **Utility AI brain** — every 0.5s it scores all 15 tasks based on hunger, health, danger, distance to you, time of day, and nearby resources, then picks the best one (with hysteresis so it doesn't flip-flop).
-- **A\* pathfinder** — 3D voxel pathfinding with jumping, swimming, climbing, lava avoidance, path smoothing, stuck detection, and recovery (jump → dig → teleport).
+- **A\* pathfinder** — 3D voxel pathfinding with jumping, swimming, climbing, lava avoidance, path smoothing, stuck detection, and recovery (step up → dig → teleport).
+- **Talks to you** — say "Aria, mine 10 iron" in chat and it just does it (rule-based, instant; optional LLM adds personality).
 - **Perception** — scans a 32-block radius for ores, logs, crops, beds, hostiles, drops, and you.
 - **Memory** — remembers home base, beds, chests, crafting tables, waypoints, and stats. Saved to disk, survives restarts.
 - **LLM brain (optional)** — plug in any OpenAI-compatible API (OpenAI, OpenRouter, Ollama, LM Studio) and the AI gets high-level planning + personality. Falls back to rules if the API is down.
@@ -165,7 +166,7 @@ src/main/java/com/aicompanion/
 │   └── llm/                    — LLM client + planner
 ├── build/                      — structure blueprints
 ├── command/AICommand.java      — /ai command tree
-├── chat/NLPParser.java         — natural-language commands
+├── chat/                       — chat listener + natural-language parser
 └── util/                       — block/inventory/chat helpers
 ```
 

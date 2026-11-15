@@ -17,13 +17,18 @@ public class ChatUtil {
         ServerPlayerEntity p = ai.player;
         MinecraftServer server = p.getServer();
         if (server == null) return;
-        String prefix = AIMod.CONFIG.chatPrefix;
-        if (prefix == null || prefix.isBlank()) prefix = "[" + ai.name() + "]";
-        Text msg = Text.literal(prefix + " " + message).formatted(Formatting.AQUA);
+        Text msg = Text.literal(prefix(ai) + " " + message).formatted(Formatting.AQUA);
         // Send to all players
         server.getPlayerManager().sendToAll(msg, false);
         // Also log
         AIMod.LOGGER.info("[AI:{}] {}", ai.name(), message);
+    }
+
+    /** Chat prefix for this AI — config value if set, else "[<name>] ". */
+    private static String prefix(AIPlayer ai) {
+        String p = AIMod.CONFIG.chatPrefix;
+        if (p == null || p.isBlank()) return "[" + ai.name() + "]";
+        return p;
     }
 
     /** Private message to a single player. */
@@ -40,8 +45,7 @@ public class ChatUtil {
         }
         ServerPlayerEntity owner = ai.player.getServer().getPlayerManager().getPlayer(ai.ownerUuid);
         if (owner != null) {
-            String prefix = AIMod.CONFIG.chatPrefix;
-            owner.sendMessage(Text.literal(prefix + " " + message).formatted(Formatting.AQUA), false);
+            owner.sendMessage(Text.literal(prefix(ai) + " " + message).formatted(Formatting.AQUA), false);
         } else {
             sayAsAI(ai, message);
         }

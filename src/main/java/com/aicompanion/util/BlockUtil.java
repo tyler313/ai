@@ -20,7 +20,7 @@ public class BlockUtil {
         if (p.startsWith("minecraft:")) p = p.substring("minecraft:".length());
         // Try exact, then with _ore / _log suffixes
         Block b = Registries.BLOCK.get(Identifier.of("minecraft", p));
-        if (b != Blocks.AIR) return b;
+        if (b != null && b != Blocks.AIR) return b;
         // Common aliases
         return switch (p) {
             case "diamond", "diamonds" -> Blocks.DIAMOND_ORE;

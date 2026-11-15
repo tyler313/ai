@@ -4,18 +4,17 @@ import com.aicompanion.AIMod;
 import com.aicompanion.ai.Brain;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.entity.Entity;
-import net.minecraft.network.NetworkPhase;
-import net.minecraft.network.message.LastSeenMessageList;
-import net.minecraft.network.packet.s2c.play.PlayerListS2CPacket;
+import net.minecraft.network.ClientConnection;
+import net.minecraft.network.NetworkSide;
+import net.minecraft.network.packet.c2s.common.SyncedClientOptions;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ConnectedClientData;
-import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.network.ServerPlayNetworkHandler;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.world.GameMode;
-import net.minecraft.network.ClientConnection;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -70,11 +69,15 @@ public class FakePlayerManager {
             }
 
             GameProfile profile = new GameProfile(UUID.randomUUID(), aiName);
-            // Use a dummy connection so ServerPlayNetworkHandler never NPEs.
-            ClientConnection dummyConnection = new ClientConnection(NetworkPhase.PLAY);
-            ServerPlayerEntity player = server.getPlayerManager().createPlayer(profile, dummyConnection);
-            player.networkHandler = new ServerPlayNetworkHandler(server, dummyConnection, player);
-            player.setGameMode(GameMode.SURVIVAL);
+
+            // A dummy connection + network handler makes the entity behave like a
+            // real connected player, without any actual network traffic.
+            SyncedClientOptions options = SyncedClientOptions.createDefault();
+            ServerPlayerEntity player = new ServerPlayerEntity(server, world, profile, options);
+            ClientConnection dummyConnection = new ClientConnection(NetworkSide.SERVER);
+            ConnectedClientData clientData = ConnectedClientData.createDefault(profile, false);
+            player.networkHandler = new ServerPlayNetworkHandler(server, dummyConnection, player, clientData);
+            player.changeGameMode(GameMode.SURVIVAL);
 
             // Spawn near owner, or at world spawn
             if (owner != null) {
@@ -89,10 +92,12 @@ public class FakePlayerManager {
             player.getHungerManager().setFoodLevel(20);
             player.getHungerManager().setSaturationLevel(20.0f);
 
-            // Register with player manager (adds to tab list, sends join packet)
-            server.getPlayerManager().addPlayer(player);
-            // Ensure the player is in the world
-            world.spawnEntity(player);
+            // Register with the player manager (tab list, stats, chunk sending)
+            server.getPlayerManager().onPlayerConnect(dummyConnection, player, clientData);
+            // Make sure the AI is actually spawned into its world
+            if (world.getEntityById(player.getId()) == null) {
+                world.spawnEntity(player);
+            }
 
             AIPlayer ai = new AIPlayer(player, owner != null ? owner.getUuid() : null);
             ai.brain = new Brain(ai);
@@ -126,8 +131,17 @@ public class FakePlayerManager {
         try {
             ServerPlayerEntity p = ai.player;
             broadcast(server, Text.literal(p.getName().getString() + " left the game").formatted(Formatting.GRAY));
-            server.getPlayerManager().removePlayer(p, false);
-            p.remove(Entity.RemovalReason.DISCARDED);
+            try {
+                if (p.networkHandler != null) {
+                    p.networkHandler.disconnect(Text.literal("AI dismissed"));
+                }
+            } catch (Exception ignored) {
+            }
+            server.getPlayerManager().remove(p);
+            try {
+                p.getServerWorld().removePlayer(p, Entity.RemovalReason.DISCARDED);
+            } catch (Exception ignored) {
+            }
             // Clean owner mapping
             ownerToAi.values().removeIf(v -> v.equals(aiUuid));
             AIMod.LOGGER.info("[AI Companion] Dismissed '{}'", p.getName().getString());

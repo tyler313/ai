@@ -55,8 +55,7 @@ public class Perception {
 
     private static final Set<Block> LOG_BLOCKS = Set.of(
             Blocks.OAK_LOG, Blocks.SPRUCE_LOG, Blocks.BIRCH_LOG, Blocks.JUNGLE_LOG,
-            Blocks.ACACIA_LOG, Blocks.DARK_OAK_LOG, Blocks.MANGROVE_LOG, Blocks.CHERRY_LOG,
-            Blocks.PALE_OAK_LOG
+            Blocks.ACACIA_LOG, Blocks.DARK_OAK_LOG, Blocks.MANGROVE_LOG, Blocks.CHERRY_LOG
     );
 
     public Perception(AIPlayer ai, Memory memory) {

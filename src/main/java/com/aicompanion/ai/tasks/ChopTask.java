@@ -69,10 +69,9 @@ public class ChopTask implements Task {
                 lastHit = now;
                 InventoryUtil.equipBestTool(p, world.getBlockState(currentLog));
                 try {
-                    p.getInteractionManager().updateBlockBreakingProgress(currentLog, net.minecraft.util.math.Direction.UP);
                     float hardness = world.getBlockState(currentLog).getHardness(world, currentLog);
-                    if (hardness >= 0 && hardness < 3.0f) {
-                        if (world.breakBlock(currentLog, true, p)) {
+                    if (hardness >= 0 && com.aicompanion.util.MiningUtil.tickBreak(p, currentLog)) {
+                        if (world.getBlockState(currentLog).isAir()) {
                             choppedCount++;
                             brain.memory.blocksMined++;
                             // Replant sapling at base if configured

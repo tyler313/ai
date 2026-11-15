@@ -105,8 +105,7 @@ public class CombatTask implements Task {
                 lastAttack = now;
                 try {
                     p.attack(target);
-                    // Reset attack cooldown for faster DPS (server-side)
-                    p.resetLastAttackedTicks();
+                    p.swingHand(net.minecraft.util.Hand.MAIN_HAND);
                     if (target instanceof LivingEntity le && le.getHealth() <= 0) {
                         brain.memory.kills++;
                     }
@@ -128,12 +127,14 @@ public class CombatTask implements Task {
             ItemStack bow = p.getInventory().getStack(bowSlot);
             p.getInventory().setStack(bowSlot, main);
             p.getInventory().setStack(p.getInventory().selectedSlot, bow);
-            // Simulate use: spawn arrow entity toward target
+            // Spawn an arrow travelling toward the target (as if we loosed a bow).
             Vec3d from = p.getEyePos();
             Vec3d to = target.getPos().add(0, target.getHeight() * 0.8, 0);
             Vec3d dir = to.subtract(from).normalize();
-            var arrow = new net.minecraft.entity.projectile.ArrowEntity(p.getServerWorld(), p, dir.x, dir.y, dir.z, 1.5f, 1.0f);
-            arrow.setPos(from);
+            var arrow = new net.minecraft.entity.projectile.ArrowEntity(
+                    p.getServerWorld(), p, new ItemStack(Items.ARROW), p.getMainHandStack());
+            arrow.refreshPositionAndAngles(from.x, from.y, from.z, p.getYaw(), p.getPitch());
+            arrow.setVelocity(dir.x, dir.y, dir.z, 1.9f, 1.0f);
             p.getServerWorld().spawnEntity(arrow);
             // Consume arrow
             InventoryUtil.consumeItem(p, Items.ARROW, 1);

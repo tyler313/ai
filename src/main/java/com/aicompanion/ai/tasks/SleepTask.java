@@ -31,15 +31,20 @@ public class SleepTask implements Task {
         } else {
             brain.movement.stop();
             brain.movement.lookAt(bed);
-            // Try to sleep via interaction
+            // Right-click the bed (vanilla handles "can I sleep now?" for us)
             try {
-                p.getInteractionManager().interactBlock(p, net.minecraft.util.Hand.MAIN_HAND, new net.minecraft.util.hit.BlockHitResult(
-                        net.minecraft.util.math.Vec3d.ofCenter(bed), net.minecraft.util.math.Direction.UP, bed, false));
-            } catch (Exception ignored) {}
-            // Lie down visually by setting pose via sleeping flag if possible
-            try {
-                p.setSleepingPos(bed);
-            } catch (Exception ignored) {}
+                p.getInteractionManager().interactBlock(
+                        p,
+                        p.getServerWorld(),
+                        p.getMainHandStack(),
+                        net.minecraft.util.Hand.MAIN_HAND,
+                        new net.minecraft.util.hit.BlockHitResult(
+                                net.minecraft.util.math.Vec3d.ofCenter(bed),
+                                net.minecraft.util.math.Direction.UP,
+                                bed,
+                                false));
+            } catch (Exception ignored) {
+            }
         }
     }
 

@@ -215,22 +215,22 @@ public class AICommand {
         AIPlayer ai = AIMod.FAKE_PLAYERS.forOwner(player);
         if (ai == null) return noAI(src);
 
-        // Try LLM chat first, then NLP parser
-        if (AIMod.CONFIG.llmEnabled && ai.brain.llmPlanner.isAvailable()) {
-            String reply = ai.brain.llmPlanner.chatReply(message);
-            if (reply != null && !reply.isBlank()) {
-                ai.brain.sayNow(reply);
-                // Also try to act on the message
-                Task t = NLPParser.parse(ai.brain, message);
-                if (t != null) ai.brain.setForcedTask(t);
-                return 1;
-            }
-        }
+        // Act immediately with the deterministic parser (never blocks the tick).
         Task t = NLPParser.parse(ai.brain, message);
         if (t != null) {
             ai.brain.setForcedTask(t);
             ai.brain.sayNow("On it! (" + t.name() + ")");
-        } else {
+        }
+
+        // Then let the LLM add personality, asynchronously.
+        if (AIMod.CONFIG.llmEnabled && ai.brain.llmPlanner.isAvailable()) {
+            var server = src.getServer();
+            ai.brain.llmPlanner.chatReplyAsync(message).thenAccept(reply -> {
+                if (reply == null || reply.isBlank()) return;
+                AIPlayer target = ai;
+                server.execute(() -> target.brain.sayNow(reply.trim()));
+            });
+        } else if (t == null) {
             ai.brain.sayNow("I didn't understand that. Try /ai help for examples.");
         }
         return 1;

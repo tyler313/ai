@@ -38,17 +38,15 @@ public class EatTask implements Task {
         ItemStack food = InventoryUtil.findBestFood(p);
         if (food.isEmpty()) return;
 
-        // Eat it (server-side: consume directly)
-        try {
-            // Use the food item's use logic via interaction manager if available,
-            // otherwise consume manually.
-            p.getHungerManager().eat(food.getItem(), food);
-            food.decrement(1);
-        } catch (Exception e) {
-            // Fallback: manual hunger restore
+        // Eat it (server-side: apply the food component directly)
+        var foodComponent = food.get(net.minecraft.component.DataComponentTypes.FOOD);
+        if (foodComponent != null) {
+            p.getHungerManager().eat(foodComponent);
+        } else {
             p.getHungerManager().setFoodLevel(Math.min(20, p.getHungerManager().getFoodLevel() + 4));
-            food.decrement(1);
         }
+        p.swingHand(net.minecraft.util.Hand.MAIN_HAND);
+        food.decrement(1);
     }
 
     @Override public boolean isComplete(Brain brain) {

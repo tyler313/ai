@@ -1,6 +1,7 @@
 package com.aicompanion;
 
 import com.aicompanion.command.AICommand;
+import com.aicompanion.chat.ChatListener;
 import com.aicompanion.config.AIConfig;
 import com.aicompanion.player.FakePlayerManager;
 import net.fabricmc.api.ModInitializer;
@@ -36,6 +37,9 @@ public class AIMod implements ModInitializer {
 
         // Main AI tick loop — runs every server tick, brains decide every N ticks.
         ServerTickEvents.END_SERVER_TICK.register(this::onServerTick);
+
+        // Chat: players can just talk to their companion ("Aria, mine 10 iron").
+        ChatListener.register();
 
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             LOGGER.info("[AI Companion] Server started. AI ready — use /ai summon to invite your companion.");

@@ -61,7 +61,7 @@ public class InventoryUtil {
     }
 
     public static boolean hasFood(ServerPlayerEntity p) {
-        return findBestFood(p) != null && !findBestFood(p).isEmpty();
+        return !findBestFood(p).isEmpty();
     }
 
     public static ItemStack findBestFood(ServerPlayerEntity p) {
@@ -76,7 +76,7 @@ public class InventoryUtil {
                 best = s;
             }
         }
-        return best;
+        return best != null ? best : ItemStack.EMPTY;
     }
 
     private static int foodScore(Item item) {

@@ -126,31 +126,13 @@ public class MineTask implements Task {
         // Equip best tool
         InventoryUtil.equipBestTool(p, state);
 
-        long now = System.currentTimeMillis();
-        if (now - lastMineAttempt < 250) return;
-        lastMineAttempt = now;
-
         try {
-            // Face the block
+            // Face the block and keep swinging until it breaks.
             brain.movement.lookAt(pos);
-            // Break progress
-            p.getInteractionManager().updateBlockBreakingProgress(pos, net.minecraft.util.math.Direction.UP);
-            // If hardness is low, break directly for reliability
-            float hardness = state.getHardness(world, pos);
-            if (hardness >= 0 && hardness < 3.0f) {
-                boolean broken = world.breakBlock(pos, true, p);
-                if (broken) {
-                    minedCount++;
-                    brain.memory.blocksMined++;
-                    currentTarget = null;
-                }
-            } else if (hardness >= 0) {
-                // Harder blocks: keep hitting; check if broken next tick
-                if (world.getBlockState(pos).isAir()) {
-                    minedCount++;
-                    brain.memory.blocksMined++;
-                    currentTarget = null;
-                }
+            if (com.aicompanion.util.MiningUtil.tickBreak(p, pos)) {
+                minedCount++;
+                brain.memory.blocksMined++;
+                currentTarget = null;
             }
         } catch (Exception e) {
             AIMod.LOGGER.warn("[AI Companion] Mine failed", e);

@@ -117,7 +117,7 @@ public class FarmTask implements Task {
 
     private BlockPos findWork(Brain brain) {
         // Prefer mature crops, then farmland, then dirt
-        var crops = brain.perception.getResources("crop");
+        var crops = new ArrayList<>(brain.perception.getResources("crop"));
         if (!crops.isEmpty()) {
             crops.sort(Comparator.comparingDouble(pos -> pos.getSquaredDistance(brain.ai.pos())));
             return crops.get(0).toImmutable();
