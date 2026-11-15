@@ -46,9 +46,9 @@ public class Perception {
 
     private static final Set<Block> ORE_BLOCKS = Set.of(
             Blocks.DIAMOND_ORE, Blocks.IRON_ORE, Blocks.GOLD_ORE, Blocks.COAL_ORE,
-            Blocks.REDSTONE_ORE, Blocks.LAPIS_LAZULI_ORE, Blocks.EMERALD_ORE,
+            Blocks.REDSTONE_ORE, Blocks.LAPIS_ORE, Blocks.EMERALD_ORE,
             Blocks.DEEPSLATE_DIAMOND_ORE, Blocks.DEEPSLATE_IRON_ORE, Blocks.DEEPSLATE_GOLD_ORE,
-            Blocks.DEEPSLATE_COAL_ORE, Blocks.DEEPSLATE_REDSTONE_ORE, Blocks.DEEPSLATE_LAPIS_LAZULI_ORE,
+            Blocks.DEEPSLATE_COAL_ORE, Blocks.DEEPSLATE_REDSTONE_ORE, Blocks.DEEPSLATE_LAPIS_ORE,
             Blocks.DEEPSLATE_EMERALD_ORE, Blocks.NETHER_GOLD_ORE, Blocks.NETHER_QUARTZ_ORE,
             Blocks.ANCIENT_DEBRIS
     );

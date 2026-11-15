@@ -74,7 +74,7 @@ public class FakePlayerManager {
             // real connected player, without any actual network traffic.
             SyncedClientOptions options = SyncedClientOptions.createDefault();
             ServerPlayerEntity player = new ServerPlayerEntity(server, world, profile, options);
-            ClientConnection dummyConnection = new ClientConnection(NetworkSide.SERVER);
+            ClientConnection dummyConnection = new ClientConnection(NetworkSide.SERVERBOUND);
             ConnectedClientData clientData = ConnectedClientData.createDefault(profile, false);
             player.networkHandler = new ServerPlayNetworkHandler(server, dummyConnection, player, clientData);
             player.changeGameMode(GameMode.SURVIVAL);

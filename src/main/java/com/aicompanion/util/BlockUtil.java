@@ -28,7 +28,7 @@ public class BlockUtil {
             case "gold", "gold_ore" -> Blocks.GOLD_ORE;
             case "coal", "coal_ore" -> Blocks.COAL_ORE;
             case "redstone" -> Blocks.REDSTONE_ORE;
-            case "lapis", "lapis_lazuli" -> Blocks.LAPIS_LAZULI_ORE;
+            case "lapis", "lapis_lazuli" -> Blocks.LAPIS_ORE;
             case "emerald" -> Blocks.EMERALD_ORE;
             case "stone" -> Blocks.STONE;
             case "cobble", "cobblestone" -> Blocks.COBBLESTONE;
