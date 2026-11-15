@@ -172,7 +172,8 @@ src/main/java/com/aicompanion/
 └── util/                       — block/inventory/chat helpers
 ```
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/USAGE.md](docs/USAGE.md) for details.
+See **[docs/RUNNING.md](docs/RUNNING.md)** for step-by-step install/dev-run instructions,
+[docs/USAGE.md](docs/USAGE.md) for commands, and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for internals.
 
 ---
 
