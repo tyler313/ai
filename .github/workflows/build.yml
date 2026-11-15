@@ -2,6 +2,9 @@ name: build
 
 on: [push, pull_request]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -22,11 +25,26 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Build
-        run: ./gradlew build --stacktrace
+        run: ./gradlew build --stacktrace --no-daemon 2>&1 | tee build-log.txt
 
       - name: Upload artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ai-companion
           path: build/libs/*.jar
           if-no-files-found: warn
+
+      - name: Publish errors on failure
+        if: failure() && github.event_name == 'push'
+        run: |
+          {
+            echo "# CI compile output"
+            echo ""
+            grep -nE "^e: |error:|\.java:[0-9]+:|FAILURE|What went wrong|BUILD FAILED" build-log.txt | head -200
+          } > ci-errors.txt
+          git config user.name "ci-bot"
+          git config user.email "ci-bot@users.noreply.github.com"
+          git add ci-errors.txt
+          git commit -m "CI: record compile errors [skip ci]" || exit 0
+          git push
