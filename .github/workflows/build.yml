@@ -47,10 +47,7 @@ jobs:
             echo "### Build failed"
             echo ""
             echo '```'
-            grep -nE "error:|^e: |FAILURE:|What went wrong|Caused by|Could not resolve" build.log | head -60
-            echo ""
-            echo "----- tail -----"
-            tail -c 8000 build.log
+            grep -A4 -E "error: |^e: " build.log | grep -vE "^\s+at " | head -150
             echo '```'
           } > report.md
 

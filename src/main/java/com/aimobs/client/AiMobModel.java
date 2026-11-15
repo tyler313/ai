@@ -98,9 +98,4 @@ public class AiMobModel extends EntityModel<AiMobEntity> {
 					   float red, float green, float blue, float alpha) {
 		this.root.render(matrices, vertices, light, overlay, red, green, blue, alpha);
 	}
-
-	@Override
-	public ModelPart getPart() {
-		return this.root;
-	}
 }

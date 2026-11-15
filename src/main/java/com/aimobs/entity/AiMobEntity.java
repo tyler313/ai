@@ -364,7 +364,7 @@ public class AiMobEntity extends PathAwareEntity {
 				double distance = this.squaredDistanceTo(owner);
 				if (distance > 1024.0) {
 					// Owner flew away / teleported: catch up instantly.
-					this.teleportTo(owner.getX(), owner.getY(), owner.getZ());
+					this.setPosition(owner.getX(), owner.getY(), owner.getZ());
 				} else if (distance > 25.0 && --this.repathTimer <= 0) {
 					this.repathTimer = 12;
 					this.getNavigation().startMovingTo(owner, 1.2);

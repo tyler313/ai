@@ -1,6 +1,7 @@
 package com.aimobs.client;
 
 import com.aimobs.net.AiChannels;
+import com.aimobs.net.ClientSender;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
