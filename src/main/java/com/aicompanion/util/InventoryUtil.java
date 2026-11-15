@@ -87,7 +87,7 @@ public class InventoryUtil {
         if (item == Items.APPLE || item == Items.CARROT || item == Items.POTATO || item == Items.MELON_SLICE || item == Items.SWEET_BERRIES) return 5;
         if (item == Items.BEETROOT || item == Items.COOKIE || item == Items.PUMPKIN_PIE) return 4;
         if (item == Items.BREAD) return 6;
-        if (item == Items.RAW_BEEF || item == Items.RAW_PORKCHOP || item == Items.RAW_CHICKEN || item == Items.RAW_MUTTON) return 2;
+        if (item == Items.BEEF || item == Items.PORKCHOP || item == Items.CHICKEN || item == Items.MUTTON) return 2;
         if (item == Items.ROTTEN_FLESH || item == Items.SPIDER_EYE) return 1;
         return -1;
     }

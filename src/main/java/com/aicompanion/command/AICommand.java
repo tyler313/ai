@@ -92,7 +92,7 @@ public class AICommand {
                         .then(net.minecraft.server.command.CommandManager.literal("guard")
                                 .executes(ctx -> setTask(ctx.getSource(), ai -> {
                                     BlockPos c = ai.brain.perception.owner != null
-                                            ? ai.brain.perception.owner.getBlockPos() : ai.memory.home;
+                                            ? ai.brain.perception.owner.getBlockPos() : ai.brain.memory.home;
                                     ai.brain.guardTask.guardAt(c, 12);
                                     return ai.brain.guardTask;
                                 }, "Guarding!")))
