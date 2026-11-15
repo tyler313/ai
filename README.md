@@ -193,6 +193,15 @@ It only mines/builds where you tell it to (or nearby resources when idle). It av
 **How do I change its name?**
 `/ai summon Steve` or set `aiName` in config.
 
+**Does it look natural while moving?**
+It walks at human speed, turns to face where it's going, and swings its arm when mining/attacking. Because fake players have no client feeding inputs, movement is driven by position updates rather than WASD — it walks and steps up blocks, but doesn't perfectly use ladders or parkour.
+
+**Known limitations**
+- No automatic armor equipping, villager trading, or netherite progression yet.
+- Building places blocks directly (no scaffolding towers), so bring materials.
+- Ladder/vine climbing is pathable but not flawless.
+- LLM planning needs an API key; without one it runs fully rule-based (still plays well).
+
 ---
 
 ## 📄 License
