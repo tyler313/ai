@@ -25,3 +25,7 @@ Thumbs.db
 # Config (may contain API keys — never commit)
 config/aicompanion.json
 config/aicompanion/
+
+# CI scratch
+ci-errors.txt
+build-log.txt
