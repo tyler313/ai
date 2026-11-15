@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "aicompanion",
+  "version": "${version}",
+  "name": "AI Companion",
+  "description": "A smart AI companion that joins your world as a real player and plays with you — follows, mines, builds, farms, fights, explores and chats. Powered by utility AI + A* pathfinding with an optional LLM brain.",
+  "authors": ["AI Companion Team"],
+  "license": "MIT",
+  "icon": "assets/aicompanion/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["com.aicompanion.AIMod"]
+  },
+  "mixins": ["aicompanion.mixins.json"],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "~1.21.1",
+    "java": ">=21"
+  },
+  "suggests": {
+    "another-mod": "*"
+  }
+}

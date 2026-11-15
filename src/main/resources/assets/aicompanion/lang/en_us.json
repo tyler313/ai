@@ -1,0 +1,5 @@
+{
+  "itemGroup.aicompanion.main": "AI Companion",
+  "command.aicompanion.summon": "Summon AI companion",
+  "command.aicompanion.dismiss": "Dismiss AI companion"
+}
