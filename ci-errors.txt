@@ -1,0 +1,9 @@
+# CI compile output
+
+22:/home/runner/work/ai/ai/src/main/java/com/aicompanion/ai/tasks/BuildTask.java:6: error: package com.aicompanion.build does not exist
+25:/home/runner/work/ai/ai/src/main/java/com/aicompanion/ai/tasks/BuildTask.java:7: error: package com.aicompanion.build does not exist
+28:/home/runner/work/ai/ai/src/main/java/com/aicompanion/ai/tasks/BuildTask.java:25: error: cannot find symbol
+33:/home/runner/work/ai/ai/src/main/java/com/aicompanion/chat/NLPParser.java:5: error: package com.aicompanion.build does not exist
+38:FAILURE: Build failed with an exception.
+40:* What went wrong:
+233:BUILD FAILED in 1m
