@@ -19,7 +19,7 @@ public class ChatUtil {
         if (server == null) return;
         Text msg = Text.literal(prefix(ai) + " " + message).formatted(Formatting.AQUA);
         // Send to all players
-        server.getPlayerManager().sendToAll(msg, false);
+        server.getPlayerManager().broadcast(msg, false);
         // Also log
         AIMod.LOGGER.info("[AI:{}] {}", ai.name(), message);
     }

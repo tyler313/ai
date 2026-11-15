@@ -3,3 +3,4 @@ accessWidener v2 named
 # Needed so we can attach a dummy ServerPlayNetworkHandler to the fake AI player,
 # making it behave like a real connected player (tab list, tracking, packets).
 accessible field net/minecraft/server/network/ServerPlayerEntity networkHandler Lnet/minecraft/server/network/ServerPlayNetworkHandler;
+accessible field net/minecraft/server/network/ServerPlayerEntity interactionManager Lnet/minecraft/server/network/ServerPlayerInteractionManager;

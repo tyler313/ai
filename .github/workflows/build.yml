@@ -44,7 +44,7 @@ jobs:
           {
             echo "# CI compile output"
             echo ""
-            grep -nE "^e: |error:|\.java:[0-9]+:|FAILURE|What went wrong|BUILD FAILED|Could not resolve|Could not find" build-log.txt | head -300
+            grep -n -A3 -E "error:|Could not resolve|Could not find" build-log.txt | head -600
           } > ci-errors.txt
           git config user.name "ci-bot"
           git config user.email "ci-bot@users.noreply.github.com"

@@ -7,7 +7,7 @@ import com.aicompanion.player.AIPlayer;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
-import net.minecraft.command.CommandSource;
+import net.minecraft.server.command.ServerServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
@@ -38,7 +38,7 @@ import net.minecraft.util.math.BlockPos;
  */
 public class AICommand {
 
-    public static void register(CommandDispatcher<CommandSource> dispatcher) {
+    public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
         dispatcher.register(
                 net.minecraft.command.CommandManager.literal("ai")
                         .then(net.minecraft.command.CommandManager.literal("summon")
@@ -115,7 +115,7 @@ public class AICommand {
 
     // ------------------------------------------------------------ handlers
 
-    private static int summon(CommandSource src, String name) {
+    private static int summon(ServerCommandSource src, String name) {
         ServerPlayerEntity player = getPlayer(src);
         if (player == null) return 0;
         AIPlayer ai = AIMod.FAKE_PLAYERS.summon(src.getServer(), player, name);
@@ -127,7 +127,7 @@ public class AICommand {
         return 1;
     }
 
-    private static int dismiss(CommandSource src) {
+    private static int dismiss(ServerCommandSource src) {
         ServerPlayerEntity player = getPlayer(src);
         if (player == null) return 0;
         boolean ok = AIMod.FAKE_PLAYERS.dismissByOwner(player);
@@ -143,7 +143,7 @@ public class AICommand {
         Task create(AIPlayer ai);
     }
 
-    private static int setTask(CommandSource src, TaskFactory factory, String confirm) {
+    private static int setTask(ServerCommandSource src, TaskFactory factory, String confirm) {
         ServerPlayerEntity player = getPlayer(src);
         if (player == null) return 0;
         AIPlayer ai = AIMod.FAKE_PLAYERS.forOwner(player);
@@ -158,7 +158,7 @@ public class AICommand {
         return 1;
     }
 
-    private static int mine(CommandSource src, String block, int count) {
+    private static int mine(ServerCommandSource src, String block, int count) {
         ServerPlayerEntity player = getPlayer(src);
         if (player == null) return 0;
         AIPlayer ai = AIMod.FAKE_PLAYERS.forOwner(player);
@@ -168,7 +168,7 @@ public class AICommand {
         return 1;
     }
 
-    private static int chop(CommandSource src, int count) {
+    private static int chop(ServerCommandSource src, int count) {
         ServerPlayerEntity player = getPlayer(src);
         if (player == null) return 0;
         AIPlayer ai = AIMod.FAKE_PLAYERS.forOwner(player);
@@ -178,7 +178,7 @@ public class AICommand {
         return 1;
     }
 
-    private static int build(CommandSource src, String structure) {
+    private static int build(ServerCommandSource src, String structure) {
         ServerPlayerEntity player = getPlayer(src);
         if (player == null) return 0;
         AIPlayer ai = AIMod.FAKE_PLAYERS.forOwner(player);
@@ -189,7 +189,7 @@ public class AICommand {
         return 1;
     }
 
-    private static int farm(CommandSource src, String crop, int count) {
+    private static int farm(ServerCommandSource src, String crop, int count) {
         ServerPlayerEntity player = getPlayer(src);
         if (player == null) return 0;
         AIPlayer ai = AIMod.FAKE_PLAYERS.forOwner(player);
@@ -199,7 +199,7 @@ public class AICommand {
         return 1;
     }
 
-    private static int craft(CommandSource src, String item, int count) {
+    private static int craft(ServerCommandSource src, String item, int count) {
         ServerPlayerEntity player = getPlayer(src);
         if (player == null) return 0;
         AIPlayer ai = AIMod.FAKE_PLAYERS.forOwner(player);
@@ -209,7 +209,7 @@ public class AICommand {
         return 1;
     }
 
-    private static int say(CommandSource src, String message) {
+    private static int say(ServerCommandSource src, String message) {
         ServerPlayerEntity player = getPlayer(src);
         if (player == null) return 0;
         AIPlayer ai = AIMod.FAKE_PLAYERS.forOwner(player);
@@ -236,7 +236,7 @@ public class AICommand {
         return 1;
     }
 
-    private static int status(CommandSource src) {
+    private static int status(ServerCommandSource src) {
         ServerPlayerEntity player = getPlayer(src);
         if (player == null) return 0;
         AIPlayer ai = AIMod.FAKE_PLAYERS.forOwner(player);
@@ -246,7 +246,7 @@ public class AICommand {
         return 1;
     }
 
-    private static int help(CommandSource src) {
+    private static int help(ServerCommandSource src) {
         String help = """
                 §6§lAI Companion§r — §7Your AI plays Minecraft with you!§r
                 §e/ai summon [name]§r — invite your AI
@@ -267,7 +267,7 @@ public class AICommand {
         return 1;
     }
 
-    private static ServerPlayerEntity getPlayer(CommandSource src) {
+    private static ServerPlayerEntity getPlayer(ServerCommandSource src) {
         try {
             return src.getPlayerOrThrow();
         } catch (Exception e) {
@@ -276,7 +276,7 @@ public class AICommand {
         }
     }
 
-    private static int noAI(CommandSource src) {
+    private static int noAI(ServerCommandSource src) {
         src.sendFeedback(() -> Text.literal("No AI summoned. Use /ai summon first.").formatted(Formatting.RED), false);
         return 0;
     }

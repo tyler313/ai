@@ -233,7 +233,7 @@ public class FakePlayerManager {
 
     private void broadcast(MinecraftServer server, Text msg) {
         try {
-            server.getPlayerManager().sendToAll(msg, false);
+            server.getPlayerManager().broadcast(msg, false);
         } catch (Exception ignored) {}
     }
 }

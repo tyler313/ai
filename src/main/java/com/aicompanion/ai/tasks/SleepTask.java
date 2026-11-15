@@ -33,7 +33,7 @@ public class SleepTask implements Task {
             brain.movement.lookAt(bed);
             // Right-click the bed (vanilla handles "can I sleep now?" for us)
             try {
-                p.getInteractionManager().interactBlock(
+                p.interactionManager.interactBlock(
                         p,
                         p.getServerWorld(),
                         p.getMainHandStack(),
