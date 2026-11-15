@@ -4,7 +4,9 @@ A **Fabric mod for Minecraft 1.21.1** where an AI joins your world as a real pla
 
 Powered by **utility AI + A\* pathfinding**, with an **optional LLM brain** (OpenAI-compatible) for smarter planning and conversation. No LLM? It still plays great with the built-in rule-based brain.
 
-![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-green) ![Fabric](https://img.shields.io/badge/Fabric-Loader-0.16+-blue) ![Java](https://img.shields.io/badge/Java-21-orange)
+![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-green) ![Fabric](https://img.shields.io/badge/Fabric-Loader-0.16+-blue) ![Java](https://img.shields.io/badge/Java-21-orange) ![build](https://github.com/tyler313/ai/actions/workflows/build.yml/badge.svg)
+
+> ✅ Compiles against Yarn 1.21.1 mappings — the CI workflow builds the mod on every push and uploads the jar.
 
 ---
 
