@@ -84,11 +84,7 @@ jobs:
         run: |
           mkdir -p run
           echo "eula=true" > run/eula.txt
-          printf 'level-type=flat
-online-mode=false
-max-tick-time=-1
-spawn-protection=0
-' > run/server.properties
+          printf 'level-type=flat\nonline-mode=false\nmax-tick-time=-1\nspawn-protection=0\n' > run/server.properties
           timeout 420 ./gradlew runServer --args="--nogui" > server.log 2>&1 || true
           echo "----- last 70 lines of the server log -----"
           tail -70 server.log
